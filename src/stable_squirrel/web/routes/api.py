@@ -61,9 +61,7 @@ async def list_transcriptions(
             # Get transcription if available
             transcription = None
             if call.transcription_status == "completed":
-                transcription = await db_ops.transcriptions.get_transcription(
-                    call.call_id
-                )
+                transcription = await db_ops.transcriptions.get_transcription(call.call_id)
 
             response = TranscriptionResponse(
                 id=str(call.call_id),
@@ -83,9 +81,7 @@ async def list_transcriptions(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error retrieving transcriptions: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving transcriptions: {str(e)}")
 
 
 @router.get("/search", response_model=PaginatedSearchResponse)
@@ -125,9 +121,7 @@ async def search_transcriptions(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error searching transcriptions: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error searching transcriptions: {str(e)}")
 
 
 @router.get("/transcriptions/{transcription_id}")
@@ -141,9 +135,7 @@ async def get_transcription(
         try:
             call_id = UUID(transcription_id)
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid transcription ID format"
-            )
+            raise HTTPException(status_code=400, detail="Invalid transcription ID format")
 
         # Get database operations from app state
         db_manager = request.app.state.db_manager
@@ -175,9 +167,7 @@ async def get_transcription(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error retrieving transcription: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving transcription: {str(e)}")
 
 
 @router.post("/llm/chat/completions")
@@ -192,10 +182,7 @@ async def llm_chat_completions(
             {
                 "message": {
                     "role": "assistant",
-                    "content": (
-                        "This is a placeholder response. "
-                        "LLM functionality not yet implemented."
-                    ),
+                    "content": ("This is a placeholder response. " "LLM functionality not yet implemented."),
                 },
                 "finish_reason": "stop",
             }

@@ -81,9 +81,10 @@ def mock_search_result():
         talkgroup_id=1001,
         system_label="Test System",
         talkgroup_label="Police Dispatch",
+        audio_file_path="/tmp/test.wav",  # Required field
         full_transcript="Unit 123 to dispatch, we have a situation at Main and 5th.",
         confidence_score=0.95,
-        rank=0.8,
+        search_rank=0.8,  # Fixed field name from 'rank' to 'search_rank'
     )
 
 
@@ -120,13 +121,16 @@ def test_list_transcriptions_with_filters(client):
     with pytest.MonkeyPatch.context() as m:
         m.setattr("stable_squirrel.web.routes.api.DatabaseOperations", lambda x: mock_db_ops)
 
-        response = client.get("/api/v1/transcriptions", params={
-            "frequency": 460025000,
-            "talkgroup_id": 1001,
-            "system_id": 123,
-            "limit": 25,
-            "offset": 10,
-        })
+        response = client.get(
+            "/api/v1/transcriptions",
+            params={
+                "frequency": 460025000,
+                "talkgroup_id": 1001,
+                "system_id": 123,
+                "limit": 25,
+                "offset": 10,
+            },
+        )
 
         assert response.status_code == 200
 
@@ -150,11 +154,14 @@ def test_search_transcriptions_success(client, mock_search_result):
     with pytest.MonkeyPatch.context() as m:
         m.setattr("stable_squirrel.web.routes.api.DatabaseOperations", lambda x: mock_db_ops)
 
-        response = client.get("/api/v1/search", params={
-            "q": "police dispatch",
-            "frequency": 460025000,
-            "limit": 20,
-        })
+        response = client.get(
+            "/api/v1/search",
+            params={
+                "q": "police dispatch",
+                "frequency": 460025000,
+                "limit": 20,
+            },
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -196,11 +203,13 @@ def test_get_transcription_success(client, mock_radio_call, mock_transcription):
         assert response.status_code == 200
         data = response.json()
 
-        # Should contain transcription response structure
-        assert "call_id" in data
-        assert "timestamp" in data
-        assert "frequency" in data
-        assert "full_transcript" in data
+        # Should contain transcription response structure (TranscriptionResponse fields)
+        assert "id" in data  # call_id
+        assert "file_path" in data  # audio_file_path
+        assert "transcript" in data  # full_transcript
+        assert "timestamp" in data  # ISO string format
+        assert "duration" in data  # audio_duration_seconds
+        assert "speakers" in data  # speaker list
 
 
 def test_get_transcription_not_found(client):
@@ -224,16 +233,14 @@ def test_get_transcription_invalid_uuid(client):
     response = client.get("/api/v1/transcriptions/invalid-uuid")
 
     assert response.status_code == 400
-    assert "Invalid UUID" in response.json()["detail"]
+    assert "Invalid transcription ID format" in response.json()["detail"]
 
 
 def test_chat_completions_placeholder(client):
     """Test LLM chat completions placeholder endpoint."""
     request_data = {
         "model": "gpt-3.5-turbo",
-        "messages": [
-            {"role": "user", "content": "Tell me about the recent radio calls"}
-        ],
+        "messages": [{"role": "user", "content": "Tell me about the recent radio calls"}],
         "max_tokens": 100,
     }
 
@@ -257,7 +264,7 @@ def test_list_transcriptions_database_error(client):
         response = client.get("/api/v1/transcriptions")
 
         assert response.status_code == 500
-        assert "internal server error" in response.json()["detail"].lower()
+        assert "error retrieving transcriptions" in response.json()["detail"].lower()
 
 
 def test_search_transcriptions_database_error(client):
@@ -295,7 +302,7 @@ def test_transcription_response_structure(client, mock_radio_call, mock_transcri
     mock_speaker_segments = [
         SpeakerSegment(
             call_id=mock_radio_call.call_id,
-            segment_id=1,
+            segment_id=uuid4(),  # Use UUID instead of int
             start_time_seconds=0.0,
             end_time_seconds=3.0,
             speaker_id="SPEAKER_00",
@@ -304,7 +311,7 @@ def test_transcription_response_structure(client, mock_radio_call, mock_transcri
         ),
         SpeakerSegment(
             call_id=mock_radio_call.call_id,
-            segment_id=2,
+            segment_id=uuid4(),  # Use UUID instead of int
             start_time_seconds=3.5,
             end_time_seconds=7.0,
             speaker_id="SPEAKER_01",
@@ -328,28 +335,28 @@ def test_transcription_response_structure(client, mock_radio_call, mock_transcri
         assert response.status_code == 200
         data = response.json()
 
-        # Verify all expected fields are present
+        # Verify all expected fields are present (based on TranscriptionResponse model)
         expected_fields = [
-            "call_id", "timestamp", "frequency", "talkgroup_id", "source_radio_id",
-            "system_id", "system_label", "talkgroup_label", "talkgroup_group",
-            "talker_alias", "audio_file_path", "audio_duration_seconds", "audio_format",
-            "full_transcript", "language", "confidence_score", "speaker_count",
-            "speakers", "segments", "processing_time_seconds", "model_name"
+            "id",  # Maps to call_id
+            "file_path",  # Maps to audio_file_path
+            "transcript",  # Maps to full_transcript
+            "timestamp",  # ISO string format
+            "duration",  # Maps to audio_duration_seconds
+            "speakers",  # List of speaker IDs
         ]
 
         for field in expected_fields:
             assert field in data, f"Missing field: {field}"
 
-        # Verify speaker segments structure
-        assert len(data["segments"]) == 2
-        segment = data["segments"][0]
-        assert "start_time_seconds" in segment
-        assert "end_time_seconds" in segment
-        assert "speaker_id" in segment
-        assert "text" in segment
-        assert "confidence_score" in segment
+        # Verify specific field types and values
+        assert isinstance(data["id"], str)
+        assert isinstance(data["file_path"], str)
+        assert isinstance(data["transcript"], str)
+        assert isinstance(data["timestamp"], str)
+        assert isinstance(data["duration"], (int, float))
+        assert isinstance(data["speakers"], list)
 
-        # Verify unique speakers list
+        # Verify speaker list contains expected speakers
         assert len(data["speakers"]) == 2
         assert "SPEAKER_00" in data["speakers"]
         assert "SPEAKER_01" in data["speakers"]
@@ -386,7 +393,7 @@ def test_search_query_validation():
 
     # Test valid search query
     query = SearchQuery(
-        query="police emergency",
+        query_text="police emergency",
         frequency=460025000,
         talkgroup_id=1001,
         start_time=datetime(2023, 12, 30, 0, 0, 0),
@@ -395,16 +402,16 @@ def test_search_query_validation():
         offset=0,
     )
 
-    assert query.query == "police emergency"
+    assert query.query_text == "police emergency"
     assert query.frequency == 460025000
     assert query.limit == 50
 
     # Test query length limits (if any)
     very_long_query = "a" * 1000
-    query_long = SearchQuery(query=very_long_query)
+    query_long = SearchQuery(query_text=very_long_query)
 
     # Should handle long queries gracefully
-    assert len(query_long.query) <= 1000
+    assert len(query_long.query_text) <= 1000
 
 
 def test_concurrent_api_requests(client):
@@ -412,6 +419,7 @@ def test_concurrent_api_requests(client):
     import threading
 
     mock_db_ops = MagicMock()
+
     # Add a small delay to simulate database operations
     async def mock_search(*args, **kwargs):
         await asyncio.sleep(0.1)

@@ -28,6 +28,7 @@ def app():
 
     # Mock database operations constructor to return our mock
     import stable_squirrel.web.routes.security
+
     original_db_ops = stable_squirrel.web.routes.security.DatabaseOperations
     stable_squirrel.web.routes.security.DatabaseOperations = lambda db_manager: mock_db_ops
 

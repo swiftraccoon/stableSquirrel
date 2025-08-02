@@ -122,9 +122,7 @@ async def get_security_events(
 
     except Exception as e:
         logger.error(f"Error retrieving security events: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error retrieving security events: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving security events: {str(e)}")
 
 
 @router.get("/analysis/source/{system_id}", response_model=UploadSourceAnalysis)
@@ -171,10 +169,7 @@ async def get_upload_source_analysis(
 
     except Exception as e:
         logger.error(f"Error retrieving upload source analysis for {system_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error retrieving upload source analysis: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving upload source analysis: {str(e)}")
 
 
 @router.get("/summary", response_model=SecuritySummary)
@@ -191,6 +186,7 @@ async def get_security_summary(
 
         # Calculate time range
         from datetime import timedelta
+
         end_time = datetime.now()
         start_time = end_time - timedelta(hours=hours)
 
@@ -262,9 +258,7 @@ async def get_security_summary(
 
     except Exception as e:
         logger.error(f"Error generating security summary: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error generating security summary: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error generating security summary: {str(e)}")
 
 
 @router.get("/uploads/sources", response_model=List[Dict])
@@ -312,6 +306,4 @@ async def get_upload_sources(
 
     except Exception as e:
         logger.error(f"Error retrieving upload sources: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error retrieving upload sources: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving upload sources: {str(e)}")

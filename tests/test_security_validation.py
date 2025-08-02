@@ -17,10 +17,12 @@ def create_async_mock_file(filename, content_type, content):
     # Make read() async
     async def async_read():
         return content
+
     mock_file.read = async_read
 
     async def async_seek(pos):
         return None
+
     mock_file.seek = async_seek
 
     return mock_file
@@ -47,7 +49,7 @@ def validator(security_config):
 def mock_mp3_file_for_rejection():
     """Create a mock MP3 file for testing WAV rejection (now contains valid MP3 content)."""
     # Create a minimal valid MP3 file with ID3 header
-    content = b'ID3\x03\x00\x00\x00\x00\x00\x00' + b'\x00' * 1100  # Make it large enough
+    content = b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 1100  # Make it large enough
 
     mock_file = MagicMock()
     mock_file.filename = "test.wav"  # Keep .wav to test rejection
@@ -57,10 +59,12 @@ def mock_mp3_file_for_rejection():
     # Make read() async
     async def async_read():
         return content
+
     mock_file.read = async_read
 
     async def async_seek(pos):
         return None
+
     mock_file.seek = async_seek
 
     return mock_file
@@ -70,7 +74,7 @@ def mock_mp3_file_for_rejection():
 def mock_mp3_file():
     """Create a mock MP3 file."""
     # Create a minimal MP3 file with ID3 header
-    content = b'ID3\x03\x00\x00\x00\x00\x00\x00' + b'\x00' * 100
+    content = b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 100
 
     mock_file = MagicMock()
     mock_file.filename = "test.mp3"
@@ -80,10 +84,12 @@ def mock_mp3_file():
     # Make read() async
     async def async_read():
         return content
+
     mock_file.read = async_read
 
     async def async_seek(pos):
         return None
+
     mock_file.seek = async_seek
 
     return mock_file
@@ -118,7 +124,7 @@ async def test_file_too_large(validator):
 @pytest.mark.asyncio
 async def test_file_too_small(validator):
     """Test validation fails for files that are too small."""
-    content = b'small'  # Only 5 bytes - well below 1024 byte minimum
+    content = b"small"  # Only 5 bytes - well below 1024 byte minimum
     mock_file = create_async_mock_file("small.mp3", "audio/mpeg", content)
 
     with pytest.raises(ValidationError, match="File too small"):
@@ -140,7 +146,7 @@ async def test_invalid_file_extension(validator):
 @pytest.mark.asyncio
 async def test_invalid_file_extension_and_content_type(validator):
     """Test validation fails for invalid file extensions and content types."""
-    content = b'RIFF\x24\x00\x00\x00WAVE' + b'\x00' * 1100
+    content = b"RIFF\x24\x00\x00\x00WAVE" + b"\x00" * 1100
     mock_file = create_async_mock_file("test.doc", "application/msword", content)  # Wrong extension and type
 
     with pytest.raises(ValidationError, match="Invalid file extension"):
@@ -172,7 +178,7 @@ async def test_dangerous_filename_patterns(validator):
 async def test_invalid_mp3_header(validator):
     """Test validation fails for invalid MP3 headers."""
     # Create file with wrong MP3 header
-    content = b'FAKE\x24\x00\x00\x00FAKE' + b'\x00' * 1100  # Make it big enough
+    content = b"FAKE\x24\x00\x00\x00FAKE" + b"\x00" * 1100  # Make it big enough
 
     mock_file = create_async_mock_file("fake.mp3", "audio/mpeg", content)
 
@@ -184,7 +190,7 @@ async def test_invalid_mp3_header(validator):
 async def test_malicious_content_detection(validator):
     """Test detection of malicious content patterns."""
     # Create file with valid WAV header but Linux executable signature at start
-    content = b'\x7fELF' + b'\x00' * 1100  # Linux executable header at start
+    content = b"\x7fELF" + b"\x00" * 1100  # Linux executable header at start
 
     mock_file = create_async_mock_file("malicious.mp3", "audio/mpeg", content)  # Use MP3 to avoid header validation
 
@@ -195,7 +201,7 @@ async def test_malicious_content_detection(validator):
 @pytest.mark.asyncio
 async def test_empty_file_content(validator):
     """Test validation fails for empty files."""
-    content = b''  # Empty content
+    content = b""  # Empty content
     mock_file = create_async_mock_file("empty.mp3", "audio/mpeg", content)
     # Override size to be large enough to pass size check but have empty content
     mock_file.size = 2000
@@ -207,7 +213,7 @@ async def test_empty_file_content(validator):
 @pytest.mark.asyncio
 async def test_rate_limiting_per_minute(validator):
     """Test per-minute rate limiting."""
-    content = b'ID3\x03\x00\x00\x00\x00\x00\x00' + b'\x00' * 1100  # Valid MP3 header
+    content = b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 1100  # Valid MP3 header
     mock_file = create_async_mock_file("test.mp3", "audio/mpeg", content)
 
     client_ip = "192.168.1.100"
@@ -224,7 +230,7 @@ async def test_rate_limiting_per_minute(validator):
 @pytest.mark.asyncio
 async def test_rate_limiting_different_ips(validator):
     """Test that rate limiting is per-IP."""
-    content = b'ID3\x03\x00\x00\x00\x00\x00\x00' + b'\x00' * 1100  # Valid MP3 header
+    content = b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 1100  # Valid MP3 header
     mock_file = create_async_mock_file("test.mp3", "audio/mpeg", content)
 
     # Upload 5 files from first IP
@@ -251,7 +257,7 @@ async def test_no_filename(validator):
 async def test_pdf_file_detection(validator):
     """Test detection of PDF files disguised as audio."""
     # Create content with PDF signature at start
-    content = b'%PDF-1.4' + b'\x00' * 1100  # PDF header
+    content = b"%PDF-1.4" + b"\x00" * 1100  # PDF header
 
     mock_file = create_async_mock_file("fake.mp3", "audio/mpeg", content)  # Use MP3 to avoid header validation
 
@@ -292,7 +298,7 @@ async def test_validation_disabled_header_check(validator):
     validator = AudioFileValidator(config)
 
     # File with invalid header should still pass
-    content = b'FAKE\x24\x00\x00\x00WAVE' + b'\x00' * 100
+    content = b"FAKE\x24\x00\x00\x00WAVE" + b"\x00" * 100
 
     mock_file = create_async_mock_file("fake.mp3", "audio/mpeg", content)
 
@@ -304,7 +310,7 @@ async def test_validation_disabled_header_check(validator):
 async def test_m4a_file_rejection(validator):
     """Test that M4A files are now rejected (MP3/WAV only policy)."""
     # Create M4A file with valid ftyp box
-    content = b'\x00\x00\x00\x20ftyp' + b'M4A ' + b'\x00' * 1100  # Make it big enough
+    content = b"\x00\x00\x00\x20ftyp" + b"M4A " + b"\x00" * 1100  # Make it big enough
 
     mock_file = create_async_mock_file("test.m4a", "audio/mp4", content)
 
@@ -316,7 +322,7 @@ async def test_m4a_file_rejection(validator):
 async def test_flac_file_rejection(validator):
     """Test that FLAC files are now rejected (MP3/WAV only policy)."""
     # Create FLAC file with valid header
-    content = b'fLaC' + b'\x00' * 1100  # Make it big enough
+    content = b"fLaC" + b"\x00" * 1100  # Make it big enough
 
     mock_file = create_async_mock_file("test.flac", "audio/flac", content)
 
@@ -328,7 +334,7 @@ async def test_flac_file_rejection(validator):
 async def test_ogg_file_rejection(validator):
     """Test that OGG files are now rejected (MP3/WAV only policy)."""
     # Create OGG file with valid header
-    content = b'OggS' + b'\x00' * 1100  # Make it big enough
+    content = b"OggS" + b"\x00" * 1100  # Make it big enough
 
     mock_file = create_async_mock_file("test.ogg", "audio/ogg", content)
 

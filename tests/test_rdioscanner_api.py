@@ -242,8 +242,14 @@ def test_process_rdioscanner_call():
     import tempfile
     from pathlib import Path
 
-    from stable_squirrel.services.task_queue import initialize_task_queue, shutdown_task_queue
-    from stable_squirrel.web.routes.rdioscanner import RdioScannerUpload, process_rdioscanner_call
+    from stable_squirrel.services.task_queue import (
+        initialize_task_queue,
+        shutdown_task_queue,
+    )
+    from stable_squirrel.web.routes.rdioscanner import (
+        RdioScannerUpload,
+        process_rdioscanner_call,
+    )
 
     # Create test data
     upload_data = RdioScannerUpload(
@@ -287,8 +293,8 @@ def test_process_rdioscanner_call():
                         Path(temp_file.name),
                         mock_service,
                         "127.0.0.1",  # client_ip
-                        "test-key",   # api_key_id
-                        "test-agent"  # user_agent
+                        "test-key",  # api_key_id
+                        "test-agent",  # user_agent
                     )
             finally:
                 # Cleanup

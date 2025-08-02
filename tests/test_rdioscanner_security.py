@@ -1,7 +1,7 @@
 """Tests for RdioScanner API security validation."""
 
 import io
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -27,7 +27,29 @@ def security_enabled_app():
 
     app.state.config = config
     app.state.transcription_service = AsyncMock()
-    app.state.db_manager = AsyncMock()  # Add mock db_manager
+
+    # Create proper database manager mock with functioning fetchrow
+    db_manager = AsyncMock()
+
+    # Mock fetchrow to return a proper dict-like object for security events
+    db_manager.fetchrow = AsyncMock(
+        return_value={
+            "event_id": "test-event-id",
+            "timestamp": "2023-12-30T20:00:00",
+            "event_type": "upload",
+            "severity": "info",
+            "source_ip": "127.0.0.1",
+            "source_system": "123",
+            "api_key_used": "test-api-key",
+            "user_agent": "test-agent",
+            "description": "Test security event",
+            "metadata": {},
+            "related_call_id": None,
+            "related_file_path": None,
+        }
+    )
+
+    app.state.db_manager = db_manager
 
     return app
 
@@ -35,15 +57,20 @@ def security_enabled_app():
 @pytest.fixture
 def security_client(security_enabled_app):
     """Create test client with security enabled."""
-    return TestClient(security_enabled_app)
+    # Mock the task queue for all security tests
+    with patch("stable_squirrel.services.task_queue.get_task_queue") as mock_get_queue:
+        mock_queue = AsyncMock()
+        mock_queue.enqueue_task = AsyncMock(return_value="test-task-id")
+        mock_get_queue.return_value = mock_queue
+        yield TestClient(security_enabled_app)
 
 
 @pytest.fixture
 def valid_mp3_file():
     """Create a valid MP3 file that passes security validation."""
     # Create a proper MP3 file with ID3 header and some audio data
-    id3_header = b'ID3\x03\x00\x00\x00\x00\x00\x00'  # ID3v2.3 header
-    audio_data = b'\x00\x01' * 600  # Sample audio data to make it large enough
+    id3_header = b"ID3\x03\x00\x00\x00\x00\x00\x00"  # ID3v2.3 header
+    audio_data = b"\x00\x01" * 600  # Sample audio data to make it large enough
 
     content = id3_header + audio_data
 
@@ -53,7 +80,7 @@ def valid_mp3_file():
 def test_security_file_too_large(security_client):
     """Test that files exceeding size limit are rejected."""
     # Create a file larger than 1MB limit
-    large_content = b'RIFF' + b'\x00' * (2 * 1024 * 1024)  # 2MB
+    large_content = b"RIFF" + b"\x00" * (2 * 1024 * 1024)  # 2MB
     large_file = io.BytesIO(large_content)
 
     files = {"audio": ("large.mp3", large_file, "audio/mpeg")}
@@ -89,7 +116,7 @@ def test_security_file_too_small(security_client):
 def test_security_invalid_file_type(security_client):
     """Test that non-audio files are rejected."""
     # Create a file with executable header
-    exe_content = b'MZ' + b'\x00' * 1000
+    exe_content = b"MZ" + b"\x00" * 1000
     exe_file = io.BytesIO(exe_content)
 
     files = {"audio": ("malware.exe", exe_file, "application/octet-stream")}
@@ -124,7 +151,7 @@ def test_security_invalid_content_type(security_client, valid_mp3_file):
 def test_security_malicious_content_detection(security_client):
     """Test detection of malicious content patterns."""
     # Create file with script content (large enough to pass size validation)
-    malicious_content = b'RIFF' + b'\x00' * 50 + b'<script>alert("xss")</script>' + b'\x00' * 1000
+    malicious_content = b"RIFF" + b"\x00" * 50 + b'<script>alert("xss")</script>' + b"\x00" * 1000
     malicious_file = io.BytesIO(malicious_content)
 
     files = {"audio": ("malicious.mp3", malicious_file, "audio/mpeg")}
@@ -143,7 +170,7 @@ def test_security_malicious_content_detection(security_client):
 def test_security_buffer_overflow_attempt(security_client):
     """Test that files with invalid WAV headers are rejected."""
     # Create file with repeated patterns that create invalid WAV header
-    overflow_content = b'RIFF' + b'\x00' * 50 + b'A' * 600 + b'\x00' * 500
+    overflow_content = b"RIFF" + b"\x00" * 50 + b"A" * 600 + b"\x00" * 500
     overflow_file = io.BytesIO(overflow_content)
 
     files = {"audio": ("overflow.mp3", overflow_file, "audio/mpeg")}
@@ -240,7 +267,7 @@ def test_security_dangerous_filename_patterns(security_client, valid_mp3_file):
 def test_security_invalid_wav_header(security_client):
     """Test rejection of files with invalid WAV headers."""
     # Create file with fake WAV header (large enough to pass size validation)
-    fake_wav = b'FAKE' + b'\x00' * 1100  # Wrong RIFF signature, >1024 bytes
+    fake_wav = b"FAKE" + b"\x00" * 1100  # Wrong RIFF signature, >1024 bytes
     fake_file = io.BytesIO(fake_wav)
 
     files = {"audio": ("fake.mp3", fake_file, "audio/mpeg")}
@@ -294,7 +321,7 @@ def test_security_disabled_bypasses_validation():
         mock_process.return_value = None
 
         # Use a file that would normally fail security checks
-        bad_file = io.BytesIO(b'MZ' + b'\x00' * 50)  # Executable header
+        bad_file = io.BytesIO(b"MZ" + b"\x00" * 50)  # Executable header
 
         files = {"audio": ("malware.exe.mp3", bad_file, "audio/mpeg")}
         data = {

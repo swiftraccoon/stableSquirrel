@@ -49,9 +49,10 @@ class TranscriptionService:
         # Initialize and start task queue for background processing
         try:
             from stable_squirrel.services.task_queue import initialize_task_queue
+
             task_queue = initialize_task_queue(
-                max_queue_size=getattr(self.config, 'queue_size', 10000),
-                num_workers=getattr(self.config, 'num_workers', 4)
+                max_queue_size=getattr(self.config, "queue_size", 10000),
+                num_workers=getattr(self.config, "num_workers", 4),
             )
             await task_queue.start(self._process_queued_transcription)
             logger.info("Task queue started for background transcription processing")
@@ -70,6 +71,7 @@ class TranscriptionService:
         # Stop task queue
         try:
             from stable_squirrel.services.task_queue import shutdown_task_queue
+
             await shutdown_task_queue()
             logger.info("Task queue stopped")
         except Exception as e:
@@ -87,21 +89,19 @@ class TranscriptionService:
             device = self.config.device
             if device == "auto":
                 import torch
+
                 device = "cuda" if torch.cuda.is_available() else "cpu"
 
             # Load main transcription model
             self._model = whisperx.load_model(
-                self.config.model_name,
-                device=device,
-                compute_type="float16" if device == "cuda" else "int8"
+                self.config.model_name, device=device, compute_type="float16" if device == "cuda" else "int8"
             )
             logger.info(f"Loaded WhisperX model '{self.config.model_name}' on {device}")
 
             # Load alignment model if available
             try:
                 self._align_model, self._metadata = whisperx.load_align_model(
-                    language_code=self.config.language or "en",
-                    device=device
+                    language_code=self.config.language or "en", device=device
                 )
                 logger.info("Loaded alignment model for precise timestamps")
             except Exception as e:
@@ -113,10 +113,9 @@ class TranscriptionService:
             if self.config.enable_diarization:
                 try:
                     # Try different WhisperX diarization approaches
-                    if hasattr(whisperx, 'DiarizationPipeline'):
+                    if hasattr(whisperx, "DiarizationPipeline"):
                         self._diarize_model = whisperx.DiarizationPipeline(
-                            use_auth_token=None,  # You may need to set this for some models
-                            device=device
+                            use_auth_token=None, device=device  # You may need to set this for some models
                         )
                         logger.info("Loaded speaker diarization model")
                     else:
@@ -150,11 +149,7 @@ class TranscriptionService:
             audio = whisperx.load_audio(str(file_path))
 
             # Initial transcription
-            result = self._model.transcribe(
-                audio,
-                batch_size=self.config.batch_size,
-                language=self.config.language
-            )
+            result = self._model.transcribe(audio, batch_size=self.config.batch_size, language=self.config.language)
 
             # Get detected language
             detected_language = result.get("language", "en")
@@ -163,11 +158,7 @@ class TranscriptionService:
             # Align transcription for precise timestamps
             if self._align_model and self._metadata:
                 result = whisperx.align(
-                    result["segments"],
-                    self._align_model,
-                    self._metadata,
-                    audio,
-                    device=self._model.device
+                    result["segments"], self._align_model, self._metadata, audio, device=self._model.device
                 )
 
             # Perform speaker diarization if enabled
@@ -256,9 +247,7 @@ class TranscriptionService:
         segments = whisper_result.get("segments", [])
 
         # Build full transcript
-        full_transcript = " ".join(
-            segment.get("text", "").strip() for segment in segments
-        )
+        full_transcript = " ".join(segment.get("text", "").strip() for segment in segments)
 
         # Process speaker segments
         speaker_segments = []
@@ -298,26 +287,19 @@ class TranscriptionService:
             "processing_time": processing_time,
         }
 
-    def _calculate_overall_confidence(
-        self, segments: List[Dict[str, Any]]
-    ) -> Optional[float]:
+    def _calculate_overall_confidence(self, segments: List[Dict[str, Any]]) -> Optional[float]:
         """Calculate overall confidence score from segments."""
         if not segments:
             return None
 
-        confidences = [
-            float(seg.get("confidence")) for seg in segments
-            if seg.get("confidence") is not None
-        ]
+        confidences = [float(seg.get("confidence")) for seg in segments if seg.get("confidence") is not None]
 
         if not confidences:
             return None
 
         return sum(confidences) / len(confidences)
 
-    async def transcribe_rdioscanner_call(
-        self, file_path: Path, radio_call: RadioCallCreate
-    ) -> Dict[str, Any]:
+    async def transcribe_rdioscanner_call(self, file_path: Path, radio_call: RadioCallCreate) -> Dict[str, Any]:
         """Transcribe an RdioScanner call with provided metadata."""
         if not self._running or not self._model:
             raise RuntimeError("Transcription service not ready")
@@ -336,9 +318,7 @@ class TranscriptionService:
             audio = whisperx.load_audio(str(file_path))
 
             # Initial transcription
-            result = self._model.transcribe(
-                audio, batch_size=self.config.batch_size, language=self.config.language
-            )
+            result = self._model.transcribe(audio, batch_size=self.config.batch_size, language=self.config.language)
 
             # Get detected language
             detected_language = result.get("language", "en")
@@ -396,9 +376,7 @@ class TranscriptionService:
         segments = whisper_result.get("segments", [])
 
         # Build full transcript
-        full_transcript = " ".join(
-            segment.get("text", "").strip() for segment in segments
-        )
+        full_transcript = " ".join(segment.get("text", "").strip() for segment in segments)
 
         # Process speaker segments
         speaker_segments = []
@@ -450,19 +428,13 @@ class TranscriptionService:
             speaker_segments = result["speaker_segments"]
 
             logger.info(
-                f"Storing transcription for {radio_call.audio_file_path}: "
-                f"{len(speaker_segments)} speaker segments"
+                f"Storing transcription for {radio_call.audio_file_path}: " f"{len(speaker_segments)} speaker segments"
             )
 
             # Store complete transcription atomically
-            stored_result = await self.db_ops.store_complete_transcription(
-                radio_call, transcription, speaker_segments
-            )
+            stored_result = await self.db_ops.store_complete_transcription(radio_call, transcription, speaker_segments)
 
-            logger.info(
-                f"Successfully stored transcription for call "
-                f"{stored_result['radio_call']['call_id']}"
-            )
+            logger.info(f"Successfully stored transcription for call " f"{stored_result['radio_call']['call_id']}")
 
         except Exception as e:
             logger.error(f"Error storing transcription: {e}")

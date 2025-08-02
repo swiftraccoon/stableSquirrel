@@ -1,5 +1,6 @@
 """Database CRUD operations for radio calls and transcriptions."""
 
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -96,9 +97,7 @@ class RadioCallOperations:
             WHERE call_id = $1
         """
 
-        await self.db.execute(
-            query, call_id, status, transcribed_at or datetime.now()
-        )
+        await self.db.execute(query, call_id, status, transcribed_at or datetime.now())
 
     async def search_radio_calls(self, search_query: SearchQuery) -> List[RadioCall]:
         """Search radio calls with filters."""
@@ -162,9 +161,7 @@ class TranscriptionOperations:
     def __init__(self, db_manager: DatabaseManager):
         self.db = db_manager
 
-    async def create_transcription(
-        self, transcription: TranscriptionCreate
-    ) -> Transcription:
+    async def create_transcription(self, transcription: TranscriptionCreate) -> Transcription:
         """Create a new transcription record."""
         query = """
             INSERT INTO transcriptions (
@@ -202,9 +199,7 @@ class TranscriptionOperations:
         row = await self.db.fetchrow(query, call_id)
         return Transcription(**dict(row)) if row else None
 
-    async def search_transcriptions(
-        self, search_query: SearchQuery
-    ) -> List[SearchResult]:
+    async def search_transcriptions(self, search_query: SearchQuery) -> List[SearchResult]:
         """Search transcriptions with full-text search."""
         conditions = ["rc.call_id = t.call_id"]
         params = []
@@ -213,12 +208,7 @@ class TranscriptionOperations:
         # Text search using PostgreSQL full-text search
         if search_query.query_text:
             param_count += 1
-            conditions.append(
-                (
-                    f"to_tsvector('english', t.full_transcript) "
-                    f"@@ plainto_tsquery(${param_count})"
-                )
-            )
+            conditions.append((f"to_tsvector('english', t.full_transcript) " f"@@ plainto_tsquery(${param_count})"))
             params.append(search_query.query_text)
 
         # Add radio call filters
@@ -292,9 +282,7 @@ class SpeakerSegmentOperations:
     def __init__(self, db_manager: DatabaseManager):
         self.db = db_manager
 
-    async def create_speaker_segments(
-        self, segments: List[SpeakerSegment]
-    ) -> List[SpeakerSegment]:
+    async def create_speaker_segments(self, segments: List[SpeakerSegment]) -> List[SpeakerSegment]:
         """Create multiple speaker segment records."""
         if not segments:
             return []
@@ -319,18 +307,19 @@ class SpeakerSegmentOperations:
             confidence_param = f"${param_count}"
 
             value_placeholders.append(
-                f"({call_id_param}, {start_param}, {end_param}, "
-                f"{speaker_param}, {text_param}, {confidence_param})"
+                f"({call_id_param}, {start_param}, {end_param}, " f"{speaker_param}, {text_param}, {confidence_param})"
             )
 
-            params.extend([
-                segment.call_id,
-                segment.start_time_seconds,
-                segment.end_time_seconds,
-                segment.speaker_id,
-                segment.text,
-                segment.confidence_score,
-            ])
+            params.extend(
+                [
+                    segment.call_id,
+                    segment.start_time_seconds,
+                    segment.end_time_seconds,
+                    segment.speaker_id,
+                    segment.text,
+                    segment.confidence_score,
+                ]
+            )
 
         query = f"""
             INSERT INTO speaker_segments (
@@ -393,12 +382,24 @@ class DatabaseOperations:
                 """
                 stored_call_row = await conn.fetchrow(
                     radio_call_sql,
-                    call_id, radio_call.timestamp, radio_call.frequency,
-                    radio_call.talkgroup_id, radio_call.source_radio_id, radio_call.system_id,
-                    radio_call.system_label, radio_call.talkgroup_label, radio_call.talkgroup_group,
-                    radio_call.talker_alias, radio_call.audio_file_path, radio_call.audio_duration_seconds,
-                    radio_call.audio_format, "processing", radio_call.upload_source_ip,
-                    radio_call.upload_source_system, radio_call.upload_api_key_id, radio_call.upload_user_agent
+                    call_id,
+                    radio_call.timestamp,
+                    radio_call.frequency,
+                    radio_call.talkgroup_id,
+                    radio_call.source_radio_id,
+                    radio_call.system_id,
+                    radio_call.system_label,
+                    radio_call.talkgroup_label,
+                    radio_call.talkgroup_group,
+                    radio_call.talker_alias,
+                    radio_call.audio_file_path,
+                    radio_call.audio_duration_seconds,
+                    radio_call.audio_format,
+                    "processing",
+                    radio_call.upload_source_ip,
+                    radio_call.upload_source_system,
+                    radio_call.upload_api_key_id,
+                    radio_call.upload_user_agent,
                 )
 
                 # Insert transcription
@@ -411,9 +412,13 @@ class DatabaseOperations:
                 """
                 stored_transcription_row = await conn.fetchrow(
                     transcription_sql,
-                    call_id, transcription.full_transcript, transcription.language,
-                    transcription.confidence_score, transcription.speaker_count,
-                    transcription.model_name, transcription.processing_time_seconds
+                    call_id,
+                    transcription.full_transcript,
+                    transcription.language,
+                    transcription.confidence_score,
+                    transcription.speaker_count,
+                    transcription.model_name,
+                    transcription.processing_time_seconds,
                 )
 
                 # Insert speaker segments
@@ -429,22 +434,24 @@ class DatabaseOperations:
                     for segment in speaker_segments:
                         segment_row = await conn.fetchrow(
                             segment_sql,
-                            call_id, segment.segment_id, segment.start_time_seconds,
-                            segment.end_time_seconds, segment.speaker_id, segment.text,
-                            segment.confidence_score
+                            call_id,
+                            segment.segment_id,
+                            segment.start_time_seconds,
+                            segment.end_time_seconds,
+                            segment.speaker_id,
+                            segment.text,
+                            segment.confidence_score,
                         )
                         stored_segments.append(segment_row)
 
                 # Update radio call status to completed
                 await conn.execute(
                     "UPDATE radio_calls SET transcription_status = $1, transcribed_at = NOW() WHERE call_id = $2",
-                    "completed", call_id
+                    "completed",
+                    call_id,
                 )
 
-                logger.info(
-                    f"Stored complete transcription for call {call_id}: "
-                    f"{len(stored_segments)} segments"
-                )
+                logger.info(f"Stored complete transcription for call {call_id}: " f"{len(stored_segments)} segments")
 
                 return {
                     "radio_call": dict(stored_call_row),
@@ -478,7 +485,7 @@ class SecurityEventOperations:
         """
 
         # Convert metadata dict to JSON if provided
-        metadata_json = event.metadata
+        metadata_json = json.dumps(event.metadata) if event.metadata else None
 
         row = await self.db.fetchrow(
             query,
@@ -498,7 +505,16 @@ class SecurityEventOperations:
         if not row:
             raise RuntimeError("Failed to create security event")
 
-        return SecurityEvent(**dict(row))
+        # Convert row to dict and parse JSON metadata back to dict
+        row_dict = dict(row)
+        if row_dict.get("metadata") and isinstance(row_dict["metadata"], str):
+            row_dict["metadata"] = json.loads(row_dict["metadata"])
+
+        # Convert INET type to string
+        if row_dict.get("source_ip"):
+            row_dict["source_ip"] = str(row_dict["source_ip"])
+
+        return SecurityEvent(**row_dict)
 
     async def get_security_events(
         self,
@@ -560,7 +576,21 @@ class SecurityEventOperations:
 
         params.extend([limit, offset])
         rows = await self.db.fetch(query, *params)
-        return [SecurityEvent(**dict(row)) for row in rows]
+
+        # Convert rows and parse JSON metadata
+        results = []
+        for row in rows:
+            row_dict = dict(row)
+            if row_dict.get("metadata") and isinstance(row_dict["metadata"], str):
+                row_dict["metadata"] = json.loads(row_dict["metadata"])
+
+            # Convert INET type to string
+            if row_dict.get("source_ip"):
+                row_dict["source_ip"] = str(row_dict["source_ip"])
+
+            results.append(SecurityEvent(**row_dict))
+
+        return results
 
     async def get_upload_source_analysis(self, source_system: str) -> Dict[str, Any]:
         """Analyze upload patterns for a specific source system."""
@@ -590,9 +620,7 @@ class SecurityEventOperations:
         security_stats = await self.db.fetchrow(security_events_query, source_system)
 
         # Get recent events
-        recent_events = await self.get_security_events(
-            limit=10, source_system=source_system
-        )
+        recent_events = await self.get_security_events(limit=10, source_system=source_system)
 
         # Get IP addresses used by this system
         ips_query = """

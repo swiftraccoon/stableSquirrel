@@ -8,10 +8,7 @@ def test_config_creation():
     config = Config()
     assert config.ingestion.polling_interval == 1.0
     assert config.transcription.model_name == "large-v2"
-    assert (
-        config.database.connection_url
-        == "postgresql://stable_squirrel:changeme@localhost:5432/stable_squirrel"
-    )
+    assert config.database.connection_url == "postgresql://stable_squirrel:changeme@localhost:5432/stable_squirrel"
 
 
 def test_package_import():

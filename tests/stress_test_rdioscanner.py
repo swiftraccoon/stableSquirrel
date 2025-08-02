@@ -24,23 +24,21 @@ import argparse
 import sys
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class TestConfig:
     """Configuration for stress testing."""
+
     base_url: str = "http://localhost:8000"
     api_key: str = "test-api-key"
     max_concurrent: int = 50
     total_requests: int = 1000
     ramp_up_time: int = 30  # seconds
     test_duration: int = 300  # seconds
-    file_size_range: Tuple[int, int] = (1024, 1024*1024)  # 1KB to 1MB
+    file_size_range: Tuple[int, int] = (1024, 1024 * 1024)  # 1KB to 1MB
     systems: List[str] = field(default_factory=lambda: ["100", "200", "300"])
     talkgroups: List[int] = field(default_factory=lambda: list(range(1000, 1010)))
 
@@ -48,6 +46,7 @@ class TestConfig:
 @dataclass
 class TestResult:
     """Results from a single API call."""
+
     success: bool
     response_time: float
     status_code: int
@@ -59,6 +58,7 @@ class TestResult:
 @dataclass
 class StressTestReport:
     """Complete stress test results."""
+
     config: TestConfig
     results: List[TestResult]
     start_time: datetime
@@ -79,8 +79,8 @@ class MockAudioGenerator:
     def _create_mp3_header(self) -> bytes:
         """Create a minimal valid MP3 header."""
         # ID3v2 header (10 bytes) + minimal MP3 frame
-        id3_header = b'ID3\x03\x00\x00\x00\x00\x00\x00'
-        mp3_frame = b'\xff\xfb\x90\x00' + b'\x00' * 100  # Minimal MP3 frame
+        id3_header = b"ID3\x03\x00\x00\x00\x00\x00\x00"
+        mp3_frame = b"\xff\xfb\x90\x00" + b"\x00" * 100  # Minimal MP3 frame
         return id3_header + mp3_frame
 
     async def generate_audio_file(self, size_bytes: int) -> bytes:
@@ -111,17 +111,12 @@ class RdioScannerStressTester:
     async def __aenter__(self):
         """Async context manager entry."""
         connector = aiohttp.TCPConnector(
-            limit=self.config.max_concurrent * 2,
-            limit_per_host=self.config.max_concurrent,
-            keepalive_timeout=30
+            limit=self.config.max_concurrent * 2, limit_per_host=self.config.max_concurrent, keepalive_timeout=30
         )
 
         timeout = aiohttp.ClientTimeout(total=60, connect=10)
 
-        self.session = aiohttp.ClientSession(
-            connector=connector,
-            timeout=timeout
-        )
+        self.session = aiohttp.ClientSession(connector=connector, timeout=timeout)
 
         return self
 
@@ -156,29 +151,24 @@ class RdioScannerStressTester:
 
         # Create form data
         form_data = aiohttp.FormData()
-        form_data.add_field('key', self.config.api_key)
-        form_data.add_field('system', system)
-        form_data.add_field('dateTime', str(int(time.time())))
-        form_data.add_field('frequency', str(frequency))
-        form_data.add_field('talkgroup', str(talkgroup))
-        form_data.add_field('source', str(source))
-        form_data.add_field('systemLabel', f'Test System {system}')
-        form_data.add_field('talkgroupLabel', f'Test TG {talkgroup}')
+        form_data.add_field("key", self.config.api_key)
+        form_data.add_field("system", system)
+        form_data.add_field("dateTime", str(int(time.time())))
+        form_data.add_field("frequency", str(frequency))
+        form_data.add_field("talkgroup", str(talkgroup))
+        form_data.add_field("source", str(source))
+        form_data.add_field("systemLabel", f"Test System {system}")
+        form_data.add_field("talkgroupLabel", f"Test TG {talkgroup}")
 
         # Add audio file
         form_data.add_field(
-            'audio',
+            "audio",
             audio_content,
-            filename=f'test_call_{system}_{talkgroup}_{int(time.time())}.mp3',
-            content_type='audio/mpeg'
+            filename=f"test_call_{system}_{talkgroup}_{int(time.time())}.mp3",
+            content_type="audio/mpeg",
         )
 
-        metadata = {
-            'system': system,
-            'talkgroup': talkgroup,
-            'frequency': frequency,
-            'file_size': file_size
-        }
+        metadata = {"system": system, "talkgroup": talkgroup, "frequency": frequency, "file_size": file_size}
 
         return form_data, metadata
 
@@ -195,10 +185,7 @@ class RdioScannerStressTester:
             if not self.session:
                 raise RuntimeError("Session not initialized")
 
-            async with self.session.post(
-                f"{self.config.base_url}/api/call-upload",
-                data=form_data
-            ) as response:
+            async with self.session.post(f"{self.config.base_url}/api/call-upload", data=form_data) as response:
                 response_time = time.time() - start_time
 
                 # Try to read response
@@ -215,7 +202,7 @@ class RdioScannerStressTester:
                     response_time=response_time,
                     status_code=response.status,
                     error_message=error_msg,
-                    memory_usage_mb=memory_before
+                    memory_usage_mb=memory_before,
                 )
 
         except asyncio.TimeoutError:
@@ -224,7 +211,7 @@ class RdioScannerStressTester:
                 response_time=time.time() - start_time,
                 status_code=0,
                 error_message="Request timeout",
-                memory_usage_mb=self._monitor_memory()
+                memory_usage_mb=self._monitor_memory(),
             )
         except Exception as e:
             return TestResult(
@@ -232,7 +219,7 @@ class RdioScannerStressTester:
                 response_time=time.time() - start_time,
                 status_code=0,
                 error_message=f"Exception: {str(e)[:100]}",
-                memory_usage_mb=self._monitor_memory()
+                memory_usage_mb=self._monitor_memory(),
             )
 
     async def _ramp_up_test(self) -> List[TestResult]:
@@ -261,12 +248,14 @@ class RdioScannerStressTester:
                         batch_success_rate += 1
                 else:
                     # Handle exceptions
-                    results.append(TestResult(
-                        success=False,
-                        response_time=0,
-                        status_code=0,
-                        error_message=f"Task exception: {str(result)[:100]}"
-                    ))
+                    results.append(
+                        TestResult(
+                            success=False,
+                            response_time=0,
+                            status_code=0,
+                            error_message=f"Task exception: {str(result)[:100]}",
+                        )
+                    )
 
             batch_success_rate = batch_success_rate / concurrency if concurrency > 0 else 0
             logger.info(f"Concurrency {concurrency}: {batch_success_rate:.1%} success rate")
@@ -311,21 +300,20 @@ class RdioScannerStressTester:
 
             # Wait for batch to complete or timeout
             try:
-                batch_results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=10.0
-                )
+                batch_results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=10.0)
 
                 for result in batch_results:
                     if isinstance(result, TestResult):
                         results.append(result)
                     else:
-                        results.append(TestResult(
-                            success=False,
-                            response_time=0,
-                            status_code=0,
-                            error_message=f"Batch timeout: {str(result)[:100]}"
-                        ))
+                        results.append(
+                            TestResult(
+                                success=False,
+                                response_time=0,
+                                status_code=0,
+                                error_message=f"Batch timeout: {str(result)[:100]}",
+                            )
+                        )
 
             except asyncio.TimeoutError:
                 logger.warning("Batch timeout occurred")
@@ -392,15 +380,15 @@ class RdioScannerStressTester:
             avg_response_time=avg_response_time,
             success_rate=success_rate,
             requests_per_second=requests_per_second,
-            error_breakdown=error_breakdown
+            error_breakdown=error_breakdown,
         )
 
 
 def print_report(report: StressTestReport):
     """Print formatted test report."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("           RDIOSCANNER API STRESS TEST REPORT")
-    print("="*80)
+    print("=" * 80)
 
     duration = (report.end_time - report.start_time).total_seconds()
 
@@ -433,10 +421,12 @@ def print_report(report: StressTestReport):
     print("\n🎯 LOAD TEST CONFIGURATION")
     print(f"   Max Concurrent: {report.config.max_concurrent}")
     print(f"   Base URL: {report.config.base_url}")
-    print(f"   File Size Range: {report.config.file_size_range[0]/1024:.0f}KB - "
-          f"{report.config.file_size_range[1]/1024:.0f}KB")
+    print(
+        f"   File Size Range: {report.config.file_size_range[0]/1024:.0f}KB - "
+        f"{report.config.file_size_range[1]/1024:.0f}KB"
+    )
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
 
 
 async def main():
@@ -455,7 +445,7 @@ async def main():
         api_key=args.api_key,
         max_concurrent=args.max_concurrent,
         test_duration=args.duration,
-        total_requests=args.total_requests
+        total_requests=args.total_requests,
     )
 
     try:
@@ -467,7 +457,7 @@ async def main():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             report_file = f"stress_test_report_{timestamp}.txt"
 
-            with open(report_file, 'w') as f:
+            with open(report_file, "w") as f:
                 f.write("RdioScanner API Stress Test Report\n")
                 f.write(f"Generated: {datetime.now()}\n\n")
                 f.write(f"Success Rate: {report.success_rate:.1%}\n")
@@ -477,10 +467,12 @@ async def main():
 
                 f.write("Individual Results:\n")
                 for i, result in enumerate(report.results):
-                    f.write(f"{i+1}: {'✓' if result.success else '✗'} "
-                           f"{result.response_time:.3f}s "
-                           f"HTTP {result.status_code} "
-                           f"{result.error_message or ''}\n")
+                    f.write(
+                        f"{i+1}: {'✓' if result.success else '✗'} "
+                        f"{result.response_time:.3f}s "
+                        f"HTTP {result.status_code} "
+                        f"{result.error_message or ''}\n"
+                    )
 
             print(f"\n📄 Detailed report saved to: {report_file}")
 

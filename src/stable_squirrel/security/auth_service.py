@@ -22,11 +22,7 @@ class SecurityAuthService:
         self._security_events = []  # Fallback in-memory storage if no DB operations provided
 
     async def validate_api_key(
-        self,
-        api_key: str,
-        client_ip: str,
-        system_id: Optional[str] = None,
-        user_agent: Optional[str] = None
+        self, api_key: str, client_ip: str, system_id: Optional[str] = None, user_agent: Optional[str] = None
     ) -> Tuple[bool, Optional[str], Optional[SecurityEvent]]:
         """
         Validate API key with enhanced security checks.
@@ -44,7 +40,7 @@ class SecurityAuthService:
                 source_system=system_id,
                 api_key_used="legacy",
                 user_agent=user_agent,
-                description=f"Legacy API key used by system {system_id}"
+                description=f"Legacy API key used by system {system_id}",
             )
             return True, "legacy", None
 
@@ -61,10 +57,7 @@ class SecurityAuthService:
                         api_key_used=key_config.key[:8] + "...",  # Partial key for logging
                         user_agent=user_agent,
                         description=f"API key used from unauthorized IP {client_ip}",
-                        metadata={
-                            "allowed_ips": key_config.allowed_ips,
-                            "actual_ip": client_ip
-                        }
+                        metadata={"allowed_ips": key_config.allowed_ips, "actual_ip": client_ip},
                     )
                     return False, None, event
 
@@ -78,10 +71,7 @@ class SecurityAuthService:
                         api_key_used=key_config.key[:8] + "...",
                         user_agent=user_agent,
                         description=f"API key used by unauthorized system {system_id}",
-                        metadata={
-                            "allowed_systems": key_config.allowed_systems,
-                            "actual_system": system_id
-                        }
+                        metadata={"allowed_systems": key_config.allowed_systems, "actual_system": system_id},
                     )
                     return False, None, event
 
@@ -94,7 +84,7 @@ class SecurityAuthService:
                     api_key_used=key_config.key[:8] + "...",
                     user_agent=user_agent,
                     description=f"Valid API key used by system {system_id}",
-                    metadata={"key_description": key_config.description}
+                    metadata={"key_description": key_config.description},
                 )
                 return True, key_config.key[:8], None
 
@@ -106,7 +96,7 @@ class SecurityAuthService:
             source_system=system_id,
             api_key_used=api_key[:8] + "..." if api_key else None,
             user_agent=user_agent,
-            description=f"Invalid API key attempted by system {system_id}"
+            description=f"Invalid API key attempted by system {system_id}",
         )
         return False, None, event
 
@@ -118,7 +108,7 @@ class SecurityAuthService:
         user_agent: Optional[str],
         file_name: Optional[str],
         success: bool,
-        reason: Optional[str] = None
+        reason: Optional[str] = None,
     ) -> None:
         """Log file upload attempt for audit trail."""
 
@@ -136,19 +126,11 @@ class SecurityAuthService:
             api_key_used=api_key_id,
             user_agent=user_agent,
             description=description,
-            metadata={
-                "file_name": file_name,
-                "reason": reason
-            }
+            metadata={"file_name": file_name, "reason": reason},
         )
 
     async def log_rate_limit_violation(
-        self,
-        client_ip: str,
-        system_id: Optional[str],
-        limit_type: str,
-        current_count: int,
-        limit: int
+        self, client_ip: str, system_id: Optional[str], limit_type: str, current_count: int, limit: int
     ) -> None:
         """Log rate limit violations."""
 
@@ -158,11 +140,7 @@ class SecurityAuthService:
             source_ip=client_ip,
             source_system=system_id,
             description=f"Rate limit exceeded: {limit_type}",
-            metadata={
-                "limit_type": limit_type,
-                "current_count": current_count,
-                "limit": limit
-            }
+            metadata={"limit_type": limit_type, "current_count": current_count, "limit": limit},
         )
 
     async def _log_security_event(
@@ -176,7 +154,7 @@ class SecurityAuthService:
         description: str = "",
         metadata: Optional[dict] = None,
         related_call_id: Optional[str] = None,
-        related_file_path: Optional[str] = None
+        related_file_path: Optional[str] = None,
     ) -> SecurityEvent:
         """Create and store a security event."""
 
@@ -191,14 +169,14 @@ class SecurityAuthService:
         event = SecurityEvent(
             event_type=event_type,
             severity=severity,
-            source_ip=source_ip,
+            source_ip=str(source_ip) if source_ip else None,
             source_system=source_system,
             api_key_used=api_key_used,
             user_agent=user_agent,
             description=description,
             metadata=metadata,
             related_call_id=call_id_uuid,
-            related_file_path=related_file_path
+            related_file_path=related_file_path,
         )
 
         # Store in database if available, otherwise fall back to memory
@@ -217,19 +195,15 @@ class SecurityAuthService:
             "low": logger.info,
             "medium": logger.warning,
             "high": logger.error,
-            "critical": logger.critical
+            "critical": logger.critical,
         }.get(severity, logger.info)
 
-        log_level(f"Security Event [{event_type}]: {description} "
-                 f"(IP: {source_ip}, System: {source_system})")
+        log_level(f"Security Event [{event_type}]: {description} " f"(IP: {source_ip}, System: {source_system})")
 
         return event
 
     async def get_security_events(
-        self,
-        limit: int = 100,
-        event_type: Optional[str] = None,
-        severity: Optional[str] = None
+        self, limit: int = 100, event_type: Optional[str] = None, severity: Optional[str] = None
     ) -> list[SecurityEvent]:
         """Retrieve security events for analysis."""
 
@@ -237,9 +211,7 @@ class SecurityAuthService:
         if self.security_ops:
             try:
                 return await self.security_ops.get_security_events(
-                    limit=limit,
-                    event_type=event_type,
-                    severity=severity
+                    limit=limit, event_type=event_type, severity=severity
                 )
             except Exception as e:
                 logger.warning(f"Failed to retrieve security events from database: {e}")
@@ -268,20 +240,14 @@ class SecurityAuthService:
                 logger.warning(f"Failed to retrieve upload analysis from database: {e}")
 
         # Fallback to in-memory analysis
-        system_events = [
-            e for e in self._security_events
-            if e.source_system == system_id
-        ]
+        system_events = [e for e in self._security_events if e.source_system == system_id]
 
         return {
             "system_id": system_id,
             "total_events": len(system_events),
             "upload_attempts": len([e for e in system_events if "upload" in e.event_type]),
-            "security_violations": len([
-                e for e in system_events
-                if e.severity in ["high", "critical"]
-            ]),
+            "security_violations": len([e for e in system_events if e.severity in ["high", "critical"]]),
             "last_seen": max([e.timestamp for e in system_events]) if system_events else None,
             "unique_ips": len(set([e.source_ip for e in system_events if e.source_ip])),
-            "recent_events": system_events[:10]  # Last 10 events
+            "recent_events": system_events[:10],  # Last 10 events
         }

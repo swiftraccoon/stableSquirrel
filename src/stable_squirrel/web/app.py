@@ -63,6 +63,7 @@ def create_app(
             queue_health = {"status": "unavailable"}
             try:
                 from stable_squirrel.services.task_queue import get_task_queue
+
                 task_queue = get_task_queue()
                 queue_stats = task_queue.get_queue_stats()
 
@@ -87,26 +88,20 @@ def create_app(
 
             return {
                 "status": overall_status,
-                "database": {
-                    "healthy": db_healthy,
-                    "pool_stats": db_stats
-                },
+                "database": {"healthy": db_healthy, "pool_stats": db_stats},
                 "task_queue": queue_health,
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
         except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e),
-                "timestamp": time.time()
-            }
+            return {"status": "error", "error": str(e), "timestamp": time.time()}
 
     @app.get("/api/queue-stats")
     async def get_queue_stats(request: Request) -> Dict:
         """Get detailed task queue statistics."""
         try:
             from stable_squirrel.services.task_queue import get_task_queue
+
             task_queue = get_task_queue()
             return task_queue.get_queue_stats()
         except RuntimeError:
@@ -128,11 +123,9 @@ def create_app(
         # Log slow requests (> 1 second)
         if process_time > 1.0:
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.warning(
-                f"Slow request: {request.method} {request.url.path} "
-                f"took {process_time:.3f}s"
-            )
+            logger.warning(f"Slow request: {request.method} {request.url.path} " f"took {process_time:.3f}s")
 
         return response
 

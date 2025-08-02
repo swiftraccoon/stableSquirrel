@@ -21,9 +21,7 @@ class DatabaseManager:
     async def initialize(self) -> None:
         """Initialize database connection pool."""
         try:
-            logger.info(
-                f"Connecting to TimescaleDB at {self.config.host}:{self.config.port}"
-            )
+            logger.info(f"Connecting to TimescaleDB at {self.config.host}:{self.config.port}")
 
             self._pool = await asyncpg.create_pool(
                 host=self.config.host,
@@ -45,15 +43,13 @@ class DatabaseManager:
                 if self.config.enable_timescale:
                     try:
                         ts_version = await conn.fetchval(
-                            "SELECT extversion FROM pg_extension "
-                            "WHERE extname = 'timescaledb'"
+                            "SELECT extversion FROM pg_extension " "WHERE extname = 'timescaledb'"
                         )
                         if ts_version:
                             logger.info(f"TimescaleDB version: {ts_version}")
                         else:
                             logger.warning(
-                                "TimescaleDB extension not found - install with: "
-                                "CREATE EXTENSION timescaledb;"
+                                "TimescaleDB extension not found - install with: " "CREATE EXTENSION timescaledb;"
                             )
                     except Exception as e:
                         logger.warning(f"Could not check TimescaleDB version: {e}")

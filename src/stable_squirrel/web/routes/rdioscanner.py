@@ -28,16 +28,16 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
     Fallback parser for edge cases where FastAPI's form parsing might fail.
     """
     logger.info(f"Manual parsing started - Content-Type: {content_type}, Body size: {len(body)}")
-    
-    if not content_type or not content_type.startswith('multipart/form-data'):
+
+    if not content_type or not content_type.startswith("multipart/form-data"):
         logger.error(f"Invalid content-type: {content_type}")
         return {}
 
     # Extract boundary from content-type header
     boundary = None
-    for part in content_type.split(';'):
+    for part in content_type.split(";"):
         part = part.strip()
-        if part.startswith('boundary='):
+        if part.startswith("boundary="):
             boundary = part[9:].strip('"')
             break
 
@@ -50,7 +50,7 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
 
     # Parse multipart data manually
     fields = {}
-    boundary_bytes = f'--{boundary}'.encode()
+    boundary_bytes = f"--{boundary}".encode()
 
     logger.debug(f"Looking for boundary: {boundary_bytes}")
 
@@ -65,7 +65,7 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
             logger.debug(f"Skipping first part (preamble): {part[:50]}...")
             continue
 
-        if part.strip() == b'--' or part.strip() == b'':
+        if part.strip() == b"--" or part.strip() == b"":
             # Last part with closing boundary marker
             logger.debug(f"Skipping closing part: {part}")
             continue
@@ -76,32 +76,32 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
         headers_section = None
         body_section = None
 
-        if b'\r\n\r\n' in part:
-            headers_section, body_section = part.split(b'\r\n\r\n', 1)
+        if b"\r\n\r\n" in part:
+            headers_section, body_section = part.split(b"\r\n\r\n", 1)
             logger.debug("Found \\r\\n\\r\\n separator")
-        elif b'\n\n' in part:
-            headers_section, body_section = part.split(b'\n\n', 1)
+        elif b"\n\n" in part:
+            headers_section, body_section = part.split(b"\n\n", 1)
             logger.debug("Found \\n\\n separator")
         else:
             logger.warning(f"No header/body separator found in part {i}")
             continue
 
         # Parse headers
-        headers_text = headers_section.decode('utf-8', errors='ignore').strip()
+        headers_text = headers_section.decode("utf-8", errors="ignore").strip()
         logger.debug(f"Headers text: {repr(headers_text)}")
 
         field_name = None
         filename = None
         content_type_field = None
 
-        for line in headers_text.split('\n'):
+        for line in headers_text.split("\n"):
             line = line.strip()
             logger.debug(f"Processing header line: {repr(line)}")
 
-            if line.startswith('Content-Disposition:'):
+            if line.startswith("Content-Disposition:"):
                 logger.debug(f"Found Content-Disposition: {line}")
                 # Extract name and filename
-                for item in line.split(';'):
+                for item in line.split(";"):
                     item = item.strip()
                     if item.startswith('name="'):
                         field_name = item[6:-1]
@@ -109,13 +109,13 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
                     elif item.startswith('filename="'):
                         filename = item[10:-1]
                         logger.debug(f"Extracted filename: {filename}")
-            elif line.startswith('Content-Type:'):
+            elif line.startswith("Content-Type:"):
                 content_type_field = line[13:].strip()
                 logger.debug(f"Extracted content-type: {content_type_field}")
 
         if field_name:
             # Clean up body section (remove leading/trailing whitespace)
-            body_section = body_section.rstrip(b'\r\n').rstrip(b'\n')
+            body_section = body_section.rstrip(b"\r\n").rstrip(b"\n")
 
             if filename:
                 # This is a file field
@@ -124,9 +124,9 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
                     content_type_field = "application/octet-stream"
 
                 logger.debug(
-                    f"Found file field '{field_name}': {filename} "
-                    f"({content_type_field}, {len(body_section)} bytes)"
+                    f"Found file field '{field_name}': {filename} " f"({content_type_field}, {len(body_section)} bytes)"
                 )
+
                 # Create a simple file-like object
                 class SimpleUploadFile:
                     def __init__(self, filename, content_type, content):
@@ -141,7 +141,7 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
                 fields[field_name] = SimpleUploadFile(filename, content_type_field, body_section)
             else:
                 # This is a regular field
-                value = body_section.decode('utf-8', errors='ignore').strip()
+                value = body_section.decode("utf-8", errors="ignore").strip()
                 logger.debug(f"Found field '{field_name}': {value}")
                 fields[field_name] = value
         else:
@@ -153,6 +153,7 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
 
 class RdioScannerUpload(BaseModel):
     """Model for RdioScanner call upload data."""
+
     # Required fields
     key: str
     system: str
@@ -190,18 +191,18 @@ def get_client_info(request: Request) -> tuple[str, str]:
         client_ip = client_ip.split(",")[0].strip()
     else:
         # Fall back to direct connection IP
-        client_ip = request.client.host if request.client else "unknown"
+        if request.client and request.client.host:
+            # Convert to string in case it's an IPv4Address/IPv6Address object
+            client_ip = str(request.client.host)
+        else:
+            client_ip = "unknown"
 
     user_agent = request.headers.get("user-agent", "unknown")
     return client_ip, user_agent
 
 
 async def validate_api_key_and_permissions(
-    request: Request,
-    key: str,
-    system: str,
-    client_ip: str,
-    user_agent: str
+    request: Request, key: str, system: str, client_ip: str, user_agent: str
 ) -> tuple[bool, Optional[str], Optional[str]]:
     """
     Validate API key with enhanced security checks.
@@ -214,13 +215,12 @@ async def validate_api_key_and_permissions(
 
     # Get database operations for security events
     from stable_squirrel.database.operations import DatabaseOperations
+
     db_ops = DatabaseOperations(db_manager)
 
     auth_service = SecurityAuthService(config.ingestion, db_ops.security_events)
 
-    is_valid, api_key_id, security_event = await auth_service.validate_api_key(
-        key, client_ip, system, user_agent
-    )
+    is_valid, api_key_id, security_event = await auth_service.validate_api_key(key, client_ip, system, user_agent)
 
     if not is_valid:
         error_msg = "Invalid or unauthorized API key"
@@ -236,11 +236,7 @@ async def validate_api_key_and_permissions(
 
 
 async def validate_request_data(
-    request: Request,
-    form_data: dict,
-    test: Optional[int],
-    client_ip: str,
-    user_agent: str
+    request: Request, form_data: dict, test: Optional[int], client_ip: str, user_agent: str
 ) -> tuple[bool, Optional[str]]:
     """
     Validate required request data and business rules.
@@ -272,12 +268,7 @@ async def validate_request_data(
 
 
 async def perform_file_security_validation(
-    request: Request,
-    audio,
-    client_ip: str,
-    api_key_id: Optional[str],
-    system: Optional[str],
-    user_agent: str
+    request: Request, audio, client_ip: str, api_key_id: Optional[str], system: Optional[str], user_agent: str
 ) -> tuple[bool, Optional[str]]:
     """
     Perform comprehensive file security validation.
@@ -306,6 +297,7 @@ async def perform_file_security_validation(
         if config.ingestion.track_upload_sources:
             db_manager = request.app.state.db_manager
             from stable_squirrel.database.operations import DatabaseOperations
+
             db_ops = DatabaseOperations(db_manager)
 
             auth_service = SecurityAuthService(config.ingestion, db_ops.security_events)
@@ -314,8 +306,8 @@ async def perform_file_security_validation(
                 system_id=system,
                 api_key_id=api_key_id,
                 user_agent=user_agent,
-                file_name=getattr(audio, 'filename', None),
-                success=True
+                file_name=getattr(audio, "filename", None),
+                success=True,
             )
 
         return True, None
@@ -325,6 +317,7 @@ async def perform_file_security_validation(
         if config.ingestion.track_upload_sources:
             db_manager = request.app.state.db_manager
             from stable_squirrel.database.operations import DatabaseOperations
+
             db_ops = DatabaseOperations(db_manager)
 
             auth_service = SecurityAuthService(config.ingestion, db_ops.security_events)
@@ -333,9 +326,9 @@ async def perform_file_security_validation(
                 system_id=system,
                 api_key_id=api_key_id,
                 user_agent=user_agent,
-                file_name=getattr(audio, 'filename', None),
+                file_name=getattr(audio, "filename", None),
                 success=False,
-                reason=str(e)
+                reason=str(e),
             )
 
         return False, f"File validation failed: {str(e)}"
@@ -354,6 +347,13 @@ def create_upload_data_model(
     audio = form_data.get("audio")
     audioName = form_data.get("audioName")
     audioType = form_data.get("audioType")
+
+    # Debug logging to understand what we're receiving
+    logger.debug(f"Form data received - audioName: {audioName}, audioType: {audioType}")
+    if audio:
+        logger.debug(f"Audio object type: {type(audio)}, has content_type: {hasattr(audio, 'content_type')}")
+        if hasattr(audio, "content_type"):
+            logger.debug(f"Audio content_type: {audio.content_type}")
 
     # Radio metadata
     frequency_str = form_data.get("frequency")
@@ -375,17 +375,36 @@ def create_upload_data_model(
     sources = form_data.get("sources")
     talkgroupTag = form_data.get("talkgroupTag")
 
+    # Determine audio content type with proper fallback
+    if audioType:
+        content_type = audioType
+    elif audio and hasattr(audio, "content_type") and audio.content_type:
+        content_type = audio.content_type
+    else:
+        # Default to MP3 since SDRTrunk only sends MP3 files
+        content_type = "audio/mpeg"
+
+    # Ensure we have a valid filename
+    if audioName:
+        filename = audioName
+    elif audio and hasattr(audio, "filename"):
+        filename = audio.filename
+    else:
+        filename = "unknown.mp3"
+
+    # Get file size
+    if audio and hasattr(audio, "size"):
+        file_size = audio.size
+    else:
+        file_size = 0
+
     return RdioScannerUpload(
         key=key or "debug-key",
         system=system or "debug-system",
         dateTime=dateTime or 1703980800,  # Fallback timestamp
-        audio_filename=audioName or (
-            audio.filename if hasattr(audio, 'filename') and audio else "debug-mode.wav"
-        ),
-        audio_content_type=audioType or (
-            audio.content_type if hasattr(audio, 'content_type') and audio else "application/octet-stream"
-        ),
-        audio_size=audio.size if hasattr(audio, 'size') and audio else 0,
+        audio_filename=filename,
+        audio_content_type=content_type,
+        audio_size=file_size,
         frequency=frequency,
         talkgroup=talkgroup,
         source=source,
@@ -437,7 +456,7 @@ async def upload_call(request: Request) -> Response:
         except Exception as e:
             logger.warning(f"FastAPI form parsing failed, trying manual parsing: {e}")
             # Fallback to manual parsing if needed
-            content_type = request.headers.get('content-type', '')
+            content_type = request.headers.get("content-type", "")
             form_data = parse_multipart_manually(content_type, raw_body)
 
         # Extract core fields
@@ -493,9 +512,7 @@ async def upload_call(request: Request) -> Response:
             logger.info(f"No API authentication configured - accepting upload from system {system}")
 
         # Validate request data
-        is_valid, error_msg = await validate_request_data(
-            request, form_data, test, client_ip, user_agent
-        )
+        is_valid, error_msg = await validate_request_data(request, form_data, test, client_ip, user_agent)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
 
@@ -517,15 +534,14 @@ async def upload_call(request: Request) -> Response:
         )
 
         # Process audio file if provided
-        if audio and hasattr(audio, 'read'):
+        if audio and hasattr(audio, "read"):
             audio_content = await audio.read()
             if not audio_content:
                 raise HTTPException(status_code=400, detail="Empty audio file")
 
             # Create temporary file for processing
             with tempfile.NamedTemporaryFile(
-                suffix=Path(upload_data.audio_filename).suffix or ".wav",
-                delete=False
+                suffix=Path(upload_data.audio_filename).suffix or ".wav", delete=False
             ) as temp_file:
                 temp_file.write(audio_content)
                 temp_file_path = Path(temp_file.name)
@@ -533,8 +549,12 @@ async def upload_call(request: Request) -> Response:
             # Process with transcription service
             transcription_service = request.app.state.transcription_service
             await process_rdioscanner_call(
-                upload_data, temp_file_path, transcription_service,
-                client_ip, api_key_id, user_agent  # Pass security context
+                upload_data,
+                temp_file_path,
+                transcription_service,
+                client_ip,
+                api_key_id,
+                user_agent,  # Pass security context
             )
 
             logger.info(f"Successfully queued call for transcription: {upload_data.audio_filename}")
@@ -546,7 +566,7 @@ async def upload_call(request: Request) -> Response:
             return {
                 "status": "ok",
                 "message": "Call received and queued for transcription",
-                "callId": upload_data.audio_filename or "unknown"
+                "callId": upload_data.audio_filename or "unknown",
             }
         else:
             return Response(content="Call imported successfully.", media_type="text/plain")
@@ -569,7 +589,7 @@ async def process_rdioscanner_call(
     transcription_service,
     client_ip: str,
     api_key_id: Optional[str] = None,
-    user_agent: Optional[str] = None
+    user_agent: Optional[str] = None,
 ) -> None:
     """Process an RdioScanner call upload."""
     try:
@@ -600,25 +620,21 @@ async def process_rdioscanner_call(
         )
 
         # Queue for background transcription processing
-        queue_success = False
         try:
             from stable_squirrel.services.task_queue import get_task_queue
+
             task_queue = get_task_queue()
             task_id = await task_queue.enqueue_task(radio_call, audio_file_path)
 
             logger.info(
-                f"RdioScanner call queued for transcription: {upload_data.audio_filename} "
-                f"(Task ID: {task_id})"
+                f"RdioScanner call queued for transcription: {upload_data.audio_filename} " f"(Task ID: {task_id})"
             )
-            queue_success = True
 
         except ValueError as e:
             # Queue is full - fall back to immediate processing
             logger.warning(f"Task queue full, processing immediately: {e}")
             try:
-                await transcription_service.transcribe_rdioscanner_call(
-                    audio_file_path, radio_call
-                )
+                await transcription_service.transcribe_rdioscanner_call(audio_file_path, radio_call)
             finally:
                 # Clean up temp file for immediate processing (background worker won't handle it)
                 try:
@@ -628,12 +644,8 @@ async def process_rdioscanner_call(
                 except Exception as cleanup_e:
                     logger.warning(f"Failed to cleanup temp file {audio_file_path}: {cleanup_e}")
 
-        logger.info(
-            f"RdioScanner call processed successfully: {upload_data.audio_filename}"
-        )
+        logger.info(f"RdioScanner call processed successfully: {upload_data.audio_filename}")
 
     except Exception as e:
-        logger.error(
-            f"Error processing RdioScanner call {upload_data.audio_filename}: {e}"
-        )
+        logger.error(f"Error processing RdioScanner call {upload_data.audio_filename}: {e}")
         raise

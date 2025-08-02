@@ -84,10 +84,108 @@ class MockDatabaseManager:
         """Mock execute method."""
         pass
 
+    def transaction(self):
+        """Mock transaction context manager."""
+
+        class MockTransaction:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+            async def execute(self, query: str, *args) -> None:
+                pass
+
+            async def fetchrow(self, query: str, *args) -> dict:
+                # For store_complete_transcription, return mock results
+                if "INSERT INTO radio_calls" in query:
+                    return {
+                        "call_id": args[0],  # call_id from arguments
+                        "timestamp": args[1],  # timestamp
+                        "frequency": args[2],  # frequency
+                        "talkgroup_id": args[3],  # talkgroup_id
+                        "source_radio_id": args[4],  # source_radio_id
+                        "system_id": args[5],  # system_id
+                        "system_label": args[6],  # system_label
+                        "talkgroup_label": args[7],  # talkgroup_label
+                        "talkgroup_group": args[8],  # talkgroup_group
+                        "talker_alias": args[9],  # talker_alias
+                        "audio_file_path": args[10],  # audio_file_path
+                        "audio_duration_seconds": args[11],  # audio_duration_seconds
+                        "audio_format": args[12],  # audio_format
+                        "transcription_status": args[13],  # transcription_status
+                        "upload_source_ip": args[14],  # upload_source_ip
+                        "upload_source_system": args[15],  # upload_source_system
+                        "upload_api_key_id": args[16],  # upload_api_key_id
+                        "upload_user_agent": args[17] if len(args) > 17 else None,  # upload_user_agent
+                    }
+                elif "INSERT INTO transcriptions" in query:
+                    return {
+                        "call_id": args[0],  # call_id
+                        "transcription_id": uuid4(),
+                        "full_transcript": args[1],  # full_transcript
+                        "language": args[2],  # language
+                        "confidence_score": args[3],  # confidence_score
+                        "speaker_count": args[4],  # speaker_count
+                        "model_name": args[5],  # model_name
+                        "processing_time_seconds": args[6],  # processing_time_seconds
+                        "created_at": datetime(2023, 12, 30, 20, 0, 0),
+                    }
+                elif "INSERT INTO speaker_segments" in query:
+                    return {
+                        "call_id": args[0],  # call_id
+                        "segment_id": args[1],  # segment_id
+                        "start_time_seconds": args[2],  # start_time_seconds
+                        "end_time_seconds": args[3],  # end_time_seconds
+                        "speaker_id": args[4],  # speaker_id
+                        "text": args[5],  # text
+                        "confidence_score": args[6],  # confidence_score
+                    }
+                return {}
+
+        return MockTransaction()
+
     async def fetch(self, query: str, *args) -> list:
         """Mock fetch method."""
         if "radio_calls" in query and "SELECT" in query:
-            return [{"call_id": uuid4(), "frequency": 460025000}]
+            return [
+                {
+                    "call_id": uuid4(),
+                    "timestamp": datetime(2023, 12, 30, 20, 0, 0),
+                    "frequency": 460025000,
+                    "talkgroup_id": 1001,
+                    "source_radio_id": 2001,
+                    "system_id": 123,
+                    "system_label": "Test System",
+                    "talkgroup_label": "Police Dispatch",
+                    "talkgroup_group": "Law Enforcement",
+                    "talker_alias": "Unit 123",
+                    "audio_file_path": "/tmp/test.wav",
+                    "audio_duration_seconds": 15.5,
+                    "audio_format": "wav",
+                    "transcription_status": "pending",
+                    "transcribed_at": None,
+                }
+            ]
+        elif "transcriptions" in query and "SELECT" in query:
+            return [
+                {
+                    "call_id": uuid4(),
+                    "timestamp": datetime(2023, 12, 30, 20, 0, 0),
+                    "frequency": 460025000,
+                    "talkgroup_id": 1001,
+                    "talkgroup_label": "Police Dispatch",
+                    "system_label": "Test System",
+                    "talker_alias": "Unit 123",
+                    "audio_file_path": "/tmp/test.wav",
+                    "audio_duration_seconds": 15.5,
+                    "full_transcript": "This is a test transcription",
+                    "speaker_count": 2,
+                    "confidence_score": 0.95,
+                    "search_rank": None,
+                }
+            ]
         return []
 
     async def fetchrow(self, query: str, *args) -> dict:
@@ -96,24 +194,24 @@ class MockDatabaseManager:
             call_id = uuid4()
             return {
                 "call_id": call_id,
-                "timestamp": args[0],
-                "frequency": args[2],
-                "talkgroup_id": args[3],
-                "source_radio_id": args[4] if len(args) > 4 else None,
-                "system_id": args[5] if len(args) > 5 else None,
-                "system_label": args[6] if len(args) > 6 else None,
-                "talkgroup_label": args[7] if len(args) > 7 else None,
-                "talkgroup_group": args[8] if len(args) > 8 else None,
-                "talker_alias": args[9] if len(args) > 9 else None,
-                "audio_file_path": args[10] if len(args) > 10 else "/tmp/test.wav",
-                "audio_duration_seconds": args[11] if len(args) > 11 else 10.0,
-                "audio_format": args[12] if len(args) > 12 else "wav",
-                "transcription_status": "pending",
+                "timestamp": args[0],  # timestamp
+                "frequency": args[1],  # frequency
+                "talkgroup_id": args[2],  # talkgroup_id
+                "source_radio_id": args[3] if len(args) > 3 else None,  # source_radio_id
+                "system_id": args[4] if len(args) > 4 else None,  # system_id
+                "system_label": args[5] if len(args) > 5 else None,  # system_label
+                "talkgroup_label": args[6] if len(args) > 6 else None,  # talkgroup_label
+                "talkgroup_group": args[7] if len(args) > 7 else None,  # talkgroup_group
+                "talker_alias": args[8] if len(args) > 8 else None,  # talker_alias
+                "audio_file_path": args[9] if len(args) > 9 else "/tmp/test.wav",  # audio_file_path
+                "audio_duration_seconds": args[10] if len(args) > 10 else 10.0,  # audio_duration_seconds
+                "audio_format": args[11] if len(args) > 11 else "wav",  # audio_format
+                "transcription_status": "pending",  # args[12] is "pending"
                 "transcribed_at": None,
-                "upload_source_ip": args[13] if len(args) > 13 else None,
-                "upload_source_system": args[14] if len(args) > 14 else None,
-                "upload_api_key_id": args[15] if len(args) > 15 else None,
-                "upload_user_agent": args[16] if len(args) > 16 else None,
+                "upload_source_ip": args[13] if len(args) > 13 else None,  # upload_source_ip
+                "upload_source_system": args[14] if len(args) > 14 else None,  # upload_source_system
+                "upload_api_key_id": args[15] if len(args) > 15 else None,  # upload_api_key_id
+                "upload_user_agent": args[16] if len(args) > 16 else None,  # upload_user_agent
             }
         elif "INSERT INTO transcriptions" in query:
             return {
@@ -202,9 +300,7 @@ def test_database_operations_init(db_operations):
 
 
 @pytest.mark.asyncio
-async def test_store_complete_transcription(
-    db_operations, radio_call_data, transcription_data, speaker_segments_data
-):
+async def test_store_complete_transcription(db_operations, radio_call_data, transcription_data, speaker_segments_data):
     """Test storing complete transcription atomically."""
     # Update speaker segments to match transcription call_id
     for segment in speaker_segments_data:
@@ -219,15 +315,15 @@ async def test_store_complete_transcription(
     assert "transcription" in result
     assert "speaker_segments" in result
 
-    # Verify the radio call
+    # Verify the radio call (returned as dict)
     stored_radio_call = result["radio_call"]
-    assert stored_radio_call.frequency == radio_call_data.frequency
-    assert stored_radio_call.talkgroup_id == radio_call_data.talkgroup_id
+    assert stored_radio_call["frequency"] == radio_call_data.frequency
+    assert stored_radio_call["talkgroup_id"] == radio_call_data.talkgroup_id
 
-    # Verify the transcription
+    # Verify the transcription (returned as dict)
     stored_transcription = result["transcription"]
-    assert stored_transcription.full_transcript == transcription_data.full_transcript
-    assert stored_transcription.language == transcription_data.language
+    assert stored_transcription["full_transcript"] == transcription_data.full_transcript
+    assert stored_transcription["language"] == transcription_data.language
 
 
 @pytest.mark.asyncio
@@ -245,11 +341,7 @@ async def test_radio_call_operations_search(db_operations):
     """Test searching radio calls."""
     from stable_squirrel.database.models import SearchQuery
 
-    search_query = SearchQuery(
-        frequency=460025000,
-        limit=10,
-        offset=0
-    )
+    search_query = SearchQuery(frequency=460025000, limit=10, offset=0)
     results = await db_operations.radio_calls.search_radio_calls(search_query)
 
     assert isinstance(results, list)
@@ -260,11 +352,7 @@ async def test_transcription_operations_search(db_operations):
     """Test searching transcriptions."""
     from stable_squirrel.database.models import SearchQuery
 
-    search_query = SearchQuery(
-        query_text="test police",
-        limit=10,
-        offset=0
-    )
+    search_query = SearchQuery(query_text="test police", limit=10, offset=0)
     results = await db_operations.transcriptions.search_transcriptions(search_query)
 
     assert isinstance(results, list)
@@ -315,20 +403,33 @@ def test_execute_insert_query_structure():
 @pytest.mark.asyncio
 async def test_error_handling_in_operations(db_operations):
     """Test error handling in database operations."""
-    # Test with invalid data that should raise an error
-    invalid_radio_call = RadioCallCreate(
-        timestamp=None,  # Invalid - required field
+    from datetime import datetime
+
+    # Create a valid radio call but simulate database error
+    valid_radio_call = RadioCallCreate(
+        timestamp=datetime(2023, 12, 30, 20, 0, 0),
         frequency=460025000,
         audio_file_path="/tmp/test.wav",
     )
 
+    # Mock the database to return None (simulating a failed insert)
+    original_fetchrow = db_operations.db.fetchrow
+
+    async def mock_fetchrow_error(*args, **kwargs):
+        return None  # Simulate failed insert
+
+    db_operations.db.fetchrow = mock_fetchrow_error
+
     # This should handle the error gracefully
-    # Note: In a real test, we'd mock the database to raise specific errors
     try:
-        await db_operations.radio_calls.create_radio_call(invalid_radio_call)
-    except Exception as e:
-        # Expected to fail due to invalid data
-        assert isinstance(e, Exception)
+        await db_operations.radio_calls.create_radio_call(valid_radio_call)
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as e:
+        # Expected to fail due to database error
+        assert "Failed to create radio call" in str(e)
+    finally:
+        # Restore original method
+        db_operations.db.fetchrow = original_fetchrow
 
 
 def test_search_query_validation():
@@ -337,20 +438,20 @@ def test_search_query_validation():
 
     # Valid search query
     search_query = SearchQuery(
-        query="test search",
+        query_text="test search",
         frequency=460025000,
         talkgroup_id=1001,
         limit=50,
         offset=0,
     )
 
-    assert search_query.query == "test search"
+    assert search_query.query_text == "test search"
     assert search_query.limit == 50
     assert search_query.offset == 0
 
     # Test limit bounds
     search_query_max = SearchQuery(
-        query="test",
+        query_text="test",
         limit=200,  # Over default max
     )
 

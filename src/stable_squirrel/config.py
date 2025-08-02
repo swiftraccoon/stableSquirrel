@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class APIKeyConfig(BaseModel):
     """Configuration for an individual API key."""
+
     key: str
     description: Optional[str] = None
     allowed_ips: Optional[list[str]] = None  # If set, only these IPs can use this key
@@ -42,8 +43,6 @@ class IngestionConfig(BaseModel):
     security_event_retention_days: int = 365  # Security event retention period
 
 
-
-
 class TranscriptionConfig(BaseModel):
     """Configuration for the transcription service."""
 
@@ -55,13 +54,13 @@ class TranscriptionConfig(BaseModel):
 
     # Performance optimization settings
     queue_size: int = 10000  # Maximum transcription queue size
-    num_workers: int = 4     # Number of background transcription workers
+    num_workers: int = 4  # Number of background transcription workers
     max_file_size_mb: int = 100  # Maximum audio file size in MB
     cleanup_interval_minutes: int = 5  # How often to clean up temp files
 
     # Advanced model settings
     compute_type: str = "auto"  # float16 for GPU, int8 for CPU
-    chunk_length: int = 30      # Audio chunk length for processing
+    chunk_length: int = 30  # Audio chunk length for processing
     use_pipeline_cache: bool = True  # Cache model pipeline for speed
 
 
@@ -117,8 +116,9 @@ class Config(BaseModel):
     alerts: AlertConfig = Field(default_factory=AlertConfig)
 
 
-def load_config(config_path: Path) -> Config:
+def load_config(config_path: Path | str) -> Config:
     """Load configuration from a YAML file."""
+    config_path = Path(config_path)
     if not config_path.exists():
         # Create a default config file
         default_config = Config()

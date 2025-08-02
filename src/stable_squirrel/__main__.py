@@ -33,9 +33,7 @@ def setup_logging(log_level: str = "INFO") -> None:
 
 async def main() -> None:
     """Main entry point for the application."""
-    parser = argparse.ArgumentParser(
-        description="Stable Squirrel SDR Transcription System"
-    )
+    parser = argparse.ArgumentParser(description="Stable Squirrel SDR Transcription System")
     parser.add_argument(
         "--config",
         type=Path,
@@ -97,17 +95,17 @@ async def main() -> None:
         logger.info(f"RdioScanner API available at: http://{host}:{port}/api/call-upload")
 
         # Start web server with Hypercorn for HTTP/2 support
-        from hypercorn.config import Config as HypercornConfig
         from hypercorn.asyncio import serve
+        from hypercorn.config import Config as HypercornConfig
 
-        config = HypercornConfig()
-        config.application_path = "app"
-        config.bind = [f"{host}:{port}"]
-        config.use_reloader = False
-        config.debug = False
-        config.access_log_format = "%(h)s %(r)s %(s)s %(b)s %(D)s"
-        
-        await serve(app, config)
+        hypercorn_config = HypercornConfig()
+        hypercorn_config.application_path = "app"
+        hypercorn_config.bind = [f"{host}:{port}"]
+        hypercorn_config.use_reloader = False
+        hypercorn_config.debug = False
+        hypercorn_config.access_log_format = "%(h)s %(r)s %(s)s %(b)s %(D)s"
+
+        await serve(app, hypercorn_config)
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")

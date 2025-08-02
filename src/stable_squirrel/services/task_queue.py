@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class TaskStatus(Enum):
     """Task processing status."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -31,6 +32,7 @@ class TaskStatus(Enum):
 @dataclass
 class TranscriptionTask:
     """A transcription task in the queue."""
+
     task_id: UUID = field(default_factory=uuid4)
     call_data: Optional[RadioCallCreate] = None
     audio_file_path: Optional[Path] = None
@@ -104,17 +106,11 @@ class TranscriptionTaskQueue:
         # Start worker tasks
         logger.info(f"Starting {self.num_workers} transcription workers")
         for i in range(self.num_workers):
-            worker_task = asyncio.create_task(
-                self._worker(f"worker-{i+1}"),
-                name=f"transcription-worker-{i+1}"
-            )
+            worker_task = asyncio.create_task(self._worker(f"worker-{i+1}"), name=f"transcription-worker-{i+1}")
             self.workers.append(worker_task)
 
         # Start retry processor
-        retry_task = asyncio.create_task(
-            self._retry_processor(),
-            name="retry-processor"
-        )
+        retry_task = asyncio.create_task(self._retry_processor(), name="retry-processor")
         self.workers.append(retry_task)
 
         logger.info("Transcription task queue started successfully")
@@ -138,7 +134,7 @@ class TranscriptionTaskQueue:
         self.workers.clear()
         logger.info("Transcription task queue stopped")
 
-    async     def enqueue_task(self, call_data: RadioCallCreate, audio_file_path: Path) -> UUID:
+    async def enqueue_task(self, call_data: RadioCallCreate, audio_file_path: Path) -> UUID:
         """
         Enqueue a transcription task for background processing.
 
@@ -148,10 +144,7 @@ class TranscriptionTaskQueue:
         Raises:
             ValueError: If queue is full
         """
-        task = TranscriptionTask(
-            call_data=call_data,
-            audio_file_path=audio_file_path
-        )
+        task = TranscriptionTask(call_data=call_data, audio_file_path=audio_file_path)
 
         try:
             # Non-blocking enqueue with immediate response
@@ -168,8 +161,7 @@ class TranscriptionTaskQueue:
         except asyncio.QueueFull:
             self.stats["queue_full_rejections"] += 1
             raise ValueError(
-                f"Transcription queue is full ({self.max_queue_size} tasks). "
-                "Try again later or increase queue size."
+                f"Transcription queue is full ({self.max_queue_size} tasks). " "Try again later or increase queue size."
             )
 
     async def get_task_status(self, task_id: UUID) -> Optional[TranscriptionTask]:
@@ -191,15 +183,17 @@ class TranscriptionTaskQueue:
     def get_queue_stats(self) -> Dict[str, Any]:
         """Get current queue statistics."""
         current_stats = self.stats.copy()
-        current_stats.update({
-            "queue_size": self.task_queue.qsize(),
-            "retry_queue_size": self.retry_queue.qsize(),
-            "active_tasks": len(self.active_tasks),
-            "completed_tasks": len(self.completed_tasks),
-            "failed_tasks": len(self.failed_tasks),
-            "workers_running": len(self.workers),
-            "is_running": self.running,
-        })
+        current_stats.update(
+            {
+                "queue_size": self.task_queue.qsize(),
+                "retry_queue_size": self.retry_queue.qsize(),
+                "active_tasks": len(self.active_tasks),
+                "completed_tasks": len(self.completed_tasks),
+                "failed_tasks": len(self.failed_tasks),
+                "workers_running": len(self.workers),
+                "is_running": self.running,
+            }
+        )
         return current_stats
 
     async def _worker(self, worker_id: str):
@@ -211,8 +205,7 @@ class TranscriptionTaskQueue:
                 # Get task from queue with timeout
                 try:
                     task = await asyncio.wait_for(
-                        self.task_queue.get(),
-                        timeout=1.0  # Check running status every second
+                        self.task_queue.get(), timeout=1.0  # Check running status every second
                     )
                 except asyncio.TimeoutError:
                     continue
@@ -262,8 +255,7 @@ class TranscriptionTaskQueue:
             else:
                 # Moving average
                 self.stats["average_processing_time"] = (
-                    self.stats["average_processing_time"] * 0.9 +
-                    processing_time * 0.1
+                    self.stats["average_processing_time"] * 0.9 + processing_time * 0.1
                 )
 
             # Move to completed tasks
@@ -324,10 +316,7 @@ class TranscriptionTaskQueue:
             try:
                 # Get task from retry queue
                 try:
-                    task = await asyncio.wait_for(
-                        self.retry_queue.get(),
-                        timeout=1.0
-                    )
+                    task = await asyncio.wait_for(self.retry_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
                     continue
 
@@ -356,7 +345,8 @@ class TranscriptionTaskQueue:
 
         # Clean completed tasks
         old_completed = [
-            task_id for task_id, task in self.completed_tasks.items()
+            task_id
+            for task_id, task in self.completed_tasks.items()
             if task.completed_at and task.completed_at.timestamp() < cutoff_time
         ]
 
@@ -365,7 +355,8 @@ class TranscriptionTaskQueue:
 
         # Clean failed tasks
         old_failed = [
-            task_id for task_id, task in self.failed_tasks.items()
+            task_id
+            for task_id, task in self.failed_tasks.items()
             if task.completed_at and task.completed_at.timestamp() < cutoff_time
         ]
 
@@ -395,10 +386,7 @@ def initialize_task_queue(max_queue_size: int = 10000, num_workers: int = 4) -> 
         logger.warning("Task queue already initialized")
         return _task_queue
 
-    _task_queue = TranscriptionTaskQueue(
-        max_queue_size=max_queue_size,
-        num_workers=num_workers
-    )
+    _task_queue = TranscriptionTaskQueue(max_queue_size=max_queue_size, num_workers=num_workers)
     return _task_queue
 
 

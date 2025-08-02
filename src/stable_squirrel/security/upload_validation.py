@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ValidationError(Exception):
     """Custom exception for validation errors."""
+
     pass
 
 
@@ -25,15 +26,12 @@ class SecurityConfig(BaseModel):
 
     # Allowed file types
     allowed_mime_types: Set[str] = Field(
-        default={
-            "audio/mpeg", "audio/mp3"
-        },
-        description="Allowed MIME types for SDR audio files (MP3 only - SDRTrunk standard)"
+        default={"audio/mpeg", "audio/mp3"},
+        description="Allowed MIME types for SDR audio files (MP3 only - SDRTrunk standard)",
     )
 
     allowed_extensions: Set[str] = Field(
-        default={".mp3"},
-        description="Allowed file extensions for SDR audio files (MP3 only - SDRTrunk standard)"
+        default={".mp3"}, description="Allowed file extensions for SDR audio files (MP3 only - SDRTrunk standard)"
     )
 
     # Content validation
@@ -94,8 +92,7 @@ class AudioFileValidator:
         if client_ip in self._upload_tracking:
             # Remove uploads older than 1 hour
             self._upload_tracking[client_ip] = [
-                ts for ts in self._upload_tracking[client_ip]
-                if current_time - ts < 3600
+                ts for ts in self._upload_tracking[client_ip] if current_time - ts < 3600
             ]
         else:
             self._upload_tracking[client_ip] = []
@@ -135,8 +132,22 @@ class AudioFileValidator:
 
         # Block potentially dangerous filenames
         dangerous_patterns = [
-            "..", "/", "\\", ":", "*", "?", '"', "<", ">", "|",
-            ".exe", ".bat", ".cmd", ".scr", ".pif", ".com"
+            "..",
+            "/",
+            "\\",
+            ":",
+            "*",
+            "?",
+            '"',
+            "<",
+            ">",
+            "|",
+            ".exe",
+            ".bat",
+            ".cmd",
+            ".scr",
+            ".pif",
+            ".com",
         ]
 
         for pattern in dangerous_patterns:
@@ -147,8 +158,7 @@ class AudioFileValidator:
         file_ext = Path(filename).suffix.lower()
         if file_ext not in self.config.allowed_extensions:
             raise ValidationError(
-                f"Invalid file extension '{file_ext}'. "
-                f"Allowed: {', '.join(sorted(self.config.allowed_extensions))}"
+                f"Invalid file extension '{file_ext}'. " f"Allowed: {', '.join(sorted(self.config.allowed_extensions))}"
             )
 
     def _validate_content_type(self, file: UploadFile) -> None:
@@ -169,7 +179,7 @@ class AudioFileValidator:
         """Validate file size."""
         # Get file size
         file_size = 0
-        if hasattr(file, 'size') and file.size:
+        if hasattr(file, "size") and file.size:
             file_size = file.size
         else:
             # Read file to get size (will reset position after)
@@ -179,16 +189,10 @@ class AudioFileValidator:
             file.file.seek(initial_position)  # Reset position
 
         if file_size < self.config.min_file_size:
-            raise ValidationError(
-                f"File too small: {file_size} bytes "
-                f"(minimum: {self.config.min_file_size} bytes)"
-            )
+            raise ValidationError(f"File too small: {file_size} bytes " f"(minimum: {self.config.min_file_size} bytes)")
 
         if file_size > self.config.max_file_size:
-            raise ValidationError(
-                f"File too large: {file_size} bytes "
-                f"(maximum: {self.config.max_file_size} bytes)"
-            )
+            raise ValidationError(f"File too large: {file_size} bytes " f"(maximum: {self.config.max_file_size} bytes)")
 
     async def _validate_file_content(self, file: UploadFile) -> None:
         """Validate file content for security."""
@@ -221,11 +225,13 @@ class AudioFileValidator:
         file_ext = Path(filename).suffix.lower()
 
         # MP3 file validation (SDRTrunk standard)
-        if file_ext == '.mp3':
+        if file_ext == ".mp3":
             # Check for ID3 tag or MP3 frame header
-            if not (content.startswith(b'ID3') or
-                   content.startswith(b'\xff\xfb') or  # MP3 frame sync
-                   content.startswith(b'\xff\xfa')):
+            if not (
+                content.startswith(b"ID3")
+                or content.startswith(b"\xff\xfb")  # MP3 frame sync
+                or content.startswith(b"\xff\xfa")
+            ):
                 raise ValidationError("Invalid MP3 file header")
         else:
             # Only MP3 files are allowed
@@ -240,16 +246,16 @@ class AudioFileValidator:
 
         # Only check for executable file headers at the very beginning
         # These should NEVER appear at the start of legitimate audio files
-        if content.startswith(b'\x7fELF'):
+        if content.startswith(b"\x7fELF"):
             raise ValidationError("Executable file detected")
-        if content.startswith(b'\xca\xfe\xba\xbe'):
+        if content.startswith(b"\xca\xfe\xba\xbe"):
             raise ValidationError("Java class file detected")
-        if content.startswith(b'%PDF'):
+        if content.startswith(b"%PDF"):
             raise ValidationError("PDF file detected")
 
         # Check for HTML/script content only in first 64 bytes (metadata area)
         header_check = content[:64].lower()
-        if b'<script' in header_check or b'javascript:' in header_check:
+        if b"<script" in header_check or b"javascript:" in header_check:
             raise ValidationError("Script content detected in file header")
 
 

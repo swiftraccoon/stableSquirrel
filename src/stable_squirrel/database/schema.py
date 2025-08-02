@@ -124,68 +124,32 @@ async def create_schema(db_manager: DatabaseManager) -> None:
     # Create indexes for optimal query performance
     indexes_sql = [
         # Time-range queries (most common)
-        (
-            "CREATE INDEX IF NOT EXISTS idx_calls_timestamp "
-            "ON radio_calls (timestamp DESC);"
-        ),
+        ("CREATE INDEX IF NOT EXISTS idx_calls_timestamp " "ON radio_calls (timestamp DESC);"),
         # Frequency and talkgroup searches
-        (
-            "CREATE INDEX IF NOT EXISTS idx_calls_frequency "
-            "ON radio_calls (frequency, timestamp DESC);"
-        ),
-        (
-            "CREATE INDEX IF NOT EXISTS idx_calls_talkgroup "
-            "ON radio_calls (talkgroup_id, timestamp DESC);"
-        ),
-        (
-            "CREATE INDEX IF NOT EXISTS idx_calls_system "
-            "ON radio_calls (system_id, timestamp DESC);"
-        ),
+        ("CREATE INDEX IF NOT EXISTS idx_calls_frequency " "ON radio_calls (frequency, timestamp DESC);"),
+        ("CREATE INDEX IF NOT EXISTS idx_calls_talkgroup " "ON radio_calls (talkgroup_id, timestamp DESC);"),
+        ("CREATE INDEX IF NOT EXISTS idx_calls_system " "ON radio_calls (system_id, timestamp DESC);"),
         # Transcription status
-        (
-            "CREATE INDEX IF NOT EXISTS idx_calls_status "
-            "ON radio_calls (transcription_status);"
-        ),
+        ("CREATE INDEX IF NOT EXISTS idx_calls_status " "ON radio_calls (transcription_status);"),
         # Full-text search on transcripts
         (
             "CREATE INDEX IF NOT EXISTS idx_transcript_text "
             "ON transcriptions USING GIN(to_tsvector('english', full_transcript));"
         ),
         # Speaker segment searches
-        (
-            "CREATE INDEX IF NOT EXISTS idx_segments_speaker "
-            "ON speaker_segments (speaker_id, call_id);"
-        ),
-        (
-            "CREATE INDEX IF NOT EXISTS idx_segments_timing "
-            "ON speaker_segments (call_id, start_time_seconds);"
-        ),
+        ("CREATE INDEX IF NOT EXISTS idx_segments_speaker " "ON speaker_segments (speaker_id, call_id);"),
+        ("CREATE INDEX IF NOT EXISTS idx_segments_timing " "ON speaker_segments (call_id, start_time_seconds);"),
         # Security event indexes
-        (
-            "CREATE INDEX IF NOT EXISTS idx_security_events_timestamp "
-            "ON security_events (timestamp DESC);"
-        ),
-        (
-            "CREATE INDEX IF NOT EXISTS idx_security_events_type "
-            "ON security_events (event_type, timestamp DESC);"
-        ),
-        (
-            "CREATE INDEX IF NOT EXISTS idx_security_events_severity "
-            "ON security_events (severity, timestamp DESC);"
-        ),
-        (
-            "CREATE INDEX IF NOT EXISTS idx_security_events_source_ip "
-            "ON security_events (source_ip, timestamp DESC);"
-        ),
+        ("CREATE INDEX IF NOT EXISTS idx_security_events_timestamp " "ON security_events (timestamp DESC);"),
+        ("CREATE INDEX IF NOT EXISTS idx_security_events_type " "ON security_events (event_type, timestamp DESC);"),
+        ("CREATE INDEX IF NOT EXISTS idx_security_events_severity " "ON security_events (severity, timestamp DESC);"),
+        ("CREATE INDEX IF NOT EXISTS idx_security_events_source_ip " "ON security_events (source_ip, timestamp DESC);"),
         (
             "CREATE INDEX IF NOT EXISTS idx_security_events_source_system "
             "ON security_events (source_system, timestamp DESC);"
         ),
         # Security tracking indexes on radio_calls
-        (
-            "CREATE INDEX IF NOT EXISTS idx_calls_upload_source_ip "
-            "ON radio_calls (upload_source_ip, timestamp DESC);"
-        ),
+        ("CREATE INDEX IF NOT EXISTS idx_calls_upload_source_ip " "ON radio_calls (upload_source_ip, timestamp DESC);"),
         (
             "CREATE INDEX IF NOT EXISTS idx_calls_upload_source_system "
             "ON radio_calls (upload_source_system, timestamp DESC);"
@@ -217,56 +181,36 @@ async def ensure_timescale_setup(db_manager: DatabaseManager) -> None:
 
     try:
         # Check if TimescaleDB is available
-        ts_check = await db_manager.fetchval(
-            "SELECT COUNT(*) FROM pg_extension WHERE extname = 'timescaledb'"
-        )
+        ts_check = await db_manager.fetchval("SELECT COUNT(*) FROM pg_extension WHERE extname = 'timescaledb'")
 
         if not ts_check:
-            logger.warning(
-                "TimescaleDB extension not found - run: CREATE EXTENSION timescaledb;"
-            )
+            logger.warning("TimescaleDB extension not found - run: CREATE EXTENSION timescaledb;")
             return
 
         # Check if radio_calls is already a hypertable
         hypertable_check = await db_manager.fetchval(
-            (
-                "SELECT COUNT(*) FROM timescaledb_information.hypertables "
-                "WHERE hypertable_name = 'radio_calls'"
-            )
+            ("SELECT COUNT(*) FROM timescaledb_information.hypertables " "WHERE hypertable_name = 'radio_calls'")
         )
 
         if not hypertable_check:
             # Convert radio_calls to hypertable (partitioned by time)
-            await db_manager.execute(
-                (
-                    "SELECT create_hypertable('radio_calls', 'timestamp', "
-                    "if_not_exists => TRUE)"
-                )
-            )
+            await db_manager.execute(("SELECT create_hypertable('radio_calls', 'timestamp', " "if_not_exists => TRUE)"))
             logger.info("Created radio_calls hypertable")
 
         # Check if security_events is already a hypertable
         security_hypertable_check = await db_manager.fetchval(
-            (
-                "SELECT COUNT(*) FROM timescaledb_information.hypertables "
-                "WHERE hypertable_name = 'security_events'"
-            )
+            ("SELECT COUNT(*) FROM timescaledb_information.hypertables " "WHERE hypertable_name = 'security_events'")
         )
 
         if not security_hypertable_check:
             # Convert security_events to hypertable (partitioned by time)
             await db_manager.execute(
-                (
-                    "SELECT create_hypertable('security_events', 'timestamp', "
-                    "if_not_exists => TRUE)"
-                )
+                ("SELECT create_hypertable('security_events', 'timestamp', " "if_not_exists => TRUE)")
             )
             logger.info("Created security_events hypertable")
 
         # Set chunk time interval to 1 day (optimize for our query patterns)
-        await db_manager.execute(
-            "SELECT set_chunk_time_interval('radio_calls', INTERVAL '1 day')"
-        )
+        await db_manager.execute("SELECT set_chunk_time_interval('radio_calls', INTERVAL '1 day')")
 
         # Enable compression for older data (saves storage)
         await db_manager.execute(
@@ -280,16 +224,11 @@ async def ensure_timescale_setup(db_manager: DatabaseManager) -> None:
 
         # Auto-compress data older than 30 days
         compression_policy_check = await db_manager.fetchval(
-            (
-                "SELECT COUNT(*) FROM timescaledb_information.jobs "
-                "WHERE proc_name = 'policy_compression'"
-            )
+            ("SELECT COUNT(*) FROM timescaledb_information.jobs " "WHERE proc_name = 'policy_compression'")
         )
 
         if not compression_policy_check:
-            await db_manager.execute(
-                "SELECT add_compression_policy('radio_calls', INTERVAL '30 days')"
-            )
+            await db_manager.execute("SELECT add_compression_policy('radio_calls', INTERVAL '30 days')")
             logger.info("Added compression policy for old data")
 
         logger.info("TimescaleDB setup completed")
