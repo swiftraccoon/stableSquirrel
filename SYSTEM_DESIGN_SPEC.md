@@ -50,7 +50,7 @@ The project standardizes on the following tools to keep the codebase consistent 
 | Formatting | Black + isort | `black --line-length=88`; `isort --profile black` |
 | Linting | Ruff | Set `max-complexity`, `ignore` rules |
 | Type Checking | Pyright for dev; Mypy for CI | `pyrightconfig.json`; `mypy --strict src/` |
-| Docstrings | Google or NumPy style | Use Napolean plugin in Sphinx |
+| Docstrings | Google style | Use Napolean plugin in Sphinx |
 | Pre-commit / CI | pre-commit, GitHub Actions | Automated checks on push and PR |
 | Test Framework | pytest | `pip install pytestpytest-cov` |
 ## Performance Considerations
