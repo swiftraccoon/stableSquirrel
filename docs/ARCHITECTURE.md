@@ -38,14 +38,12 @@ This document describes the high-level architecture of Stable Squirrel, focusing
 ### Security Monitoring System
 
 #### Security Event Tracking
-
 - **Database-Backed Logging**: Persistent security event storage in TimescaleDB
 - **Threat Classification**: Events categorized by type and severity (info/low/medium/high/critical)
 - **Source Attribution**: Full traceability from security event to upload source
 - **Rate Limiting**: Database-backed rate limiting with violation tracking
 
 #### Security APIs
-
 - **`GET /api/v1/security/events`** - Security event listing and filtering
 - **`GET /api/v1/security/analysis/source/{system_id}`** - Upload source analysis
 - **`GET /api/v1/security/summary`** - Real-time security dashboard data
@@ -54,19 +52,16 @@ This document describes the high-level architecture of Stable Squirrel, focusing
 ### Web Interface & APIs
 
 #### Core APIs
-
 - **Search API**: Full-text search across transcriptions with metadata filtering
 - **Transcription API**: Retrieve calls with speaker segments and timing
 - **Health API**: System status and readiness checks
 
 #### LLM Integration
-
 - **OpenAI API Compatible**: Forward user prompts to local or remote models
 - **Context-Aware**: Include transcription data in LLM prompts
 - **Conversation Memory**: Maintain chat context across requests
 
 #### Alert System
-
 - **Keyword Monitoring**: Real-time alerting on specified terms
 - **Multi-Channel Notifications**: Email, SMS, webhook integrations
 - **Security Alerts**: Automatic notifications for high-severity security events
@@ -76,7 +71,6 @@ This document describes the high-level architecture of Stable Squirrel, focusing
 ### TimescaleDB (Time-Series PostgreSQL)
 
 **Why TimescaleDB?**
-
 - **Scale**: Handle hundreds of millions of radio calls
 - **Performance**: Optimized for time-range queries and full-text search
 - **Mature**: Production-proven PostgreSQL ecosystem
@@ -85,7 +79,6 @@ This document describes the high-level architecture of Stable Squirrel, focusing
 #### Core Tables
 
 ##### Radio Calls (Hypertable)
-
 ```sql
 CREATE TABLE radio_calls (
     -- Time-series optimized
@@ -114,7 +107,6 @@ CREATE TABLE radio_calls (
 ```
 
 ##### Security Events (Hypertable)
-
 ```sql
 CREATE TABLE security_events (
     -- Time-series optimized
@@ -167,7 +159,6 @@ api_keys:
 ### Audit Trail & Forensics
 
 **Complete Traceability**: When malicious content is detected:
-
 1. **Source Identification**: IP address, system ID, API key used
 2. **Historical Analysis**: All uploads from that source
 3. **Security Event Timeline**: Chronological threat progression
@@ -176,7 +167,6 @@ api_keys:
 ## Deployment Options
 
 ### Direct Execution
-
 ```bash
 # Install dependencies with uv
 source .venv/bin/activate
@@ -191,7 +181,6 @@ python -m stable_squirrel --config config.yaml
 ```
 
 ### Systemd Service
-
 ```bash
 # Production deployment
 sudo cp stable-squirrel.service /etc/systemd/system/
@@ -199,7 +188,6 @@ sudo systemctl enable --now stable-squirrel.service
 ```
 
 ### Container Deployment
-
 ```bash
 # Rootless containers with Podman
 podman-compose up -d
@@ -208,19 +196,16 @@ podman-compose up -d
 ## Performance Optimizations
 
 ### Application Layer
-
 - **Asynchronous I/O**: FastAPI with async/await throughout
 - **Connection Pooling**: Persistent database connections via asyncpg
 - **Model Caching**: WhisperX models kept warm between requests
 
 ### Database Layer
-
 - **Hypertables**: Automatic time-based partitioning
 - **Optimized Indexes**: Time-range, full-text, and security-focused indexes
 - **Compression**: Automatic compression for historical data (30+ days)
 
 ### Security Performance
-
 - **Efficient Validation**: Optimized MP3 header parsing
 - **Database-Backed Rate Limiting**: Persistent tracking without memory bloat
 - **Index-Optimized Queries**: Fast security event retrieval and analysis
@@ -228,7 +213,6 @@ podman-compose up -d
 ## Development Workflow
 
 ### Code Quality Standards
-
 | Category | Tool | Configuration |
 |----------|------|---------------|
 | Formatting | Black + isort | 120 character line length |
@@ -237,7 +221,6 @@ podman-compose up -d
 | Testing | pytest | Comprehensive unit and integration tests |
 
 ### Security-First Development
-
 - **Multi-layered Validation**: Conservative "reject first" approach
 - **Comprehensive Testing**: Security scenarios included in test suite
 - **Audit Logging**: All security events logged for analysis
@@ -246,14 +229,12 @@ podman-compose up -d
 ## Testing Strategy
 
 ### Core Test Coverage
-
 - **API Integration Tests**: RdioScanner endpoint with real SDRTrunk data
 - **Security Validation Tests**: Malicious file detection and rate limiting
 - **Database Tests**: TimescaleDB operations and schema integrity
 - **End-to-End Tests**: Full ingestion → transcription → API flow
 
 ### Security Testing
-
 - **Upload Validation**: Malicious file rejection testing
 - **Rate Limiting**: Burst and sustained load testing
 - **API Key Security**: IP restriction and system validation testing
@@ -262,13 +243,11 @@ podman-compose up -d
 ## Monitoring & Operations
 
 ### Health Monitoring
-
 - **`/health/ready`**: Application readiness checks
 - **`/health/live`**: Liveness probe for container orchestration
 - **Database Connectivity**: TimescaleDB connection health
 
 ### Security Monitoring
-
 - **Real-time Dashboards**: Security event visualization
 - **Automated Alerting**: High-severity event notifications
 - **Forensic Analysis**: Historical pattern analysis and threat hunting

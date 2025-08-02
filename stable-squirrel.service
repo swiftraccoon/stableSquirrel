@@ -1,0 +1,23 @@
+[Unit]
+Description=Stable Squirrel SDR Transcription Service
+After=network.target
+
+[Service]
+Type=exec
+User=stable-squirrel
+Group=stable-squirrel
+WorkingDirectory=/opt/stable-squirrel
+Environment=PATH=/opt/stable-squirrel/.venv/bin
+ExecStart=/opt/stable-squirrel/.venv/bin/python -m stable_squirrel --config /etc/stable-squirrel/config.yaml
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/stable-squirrel /var/lib/stable-squirrel
+
+[Install]
+WantedBy=multi-user.target

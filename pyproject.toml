@@ -1,16 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stable-squirrel"
+version = "0.1.0"
+description = "SDR audio transcription and search system"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "whisperx>=3.1.0",
+    "asyncpg>=0.29.0",
+    "psycopg[binary]>=3.1.0",
+    "watchfiles>=0.21.0",
+    "pydantic>=2.5.0",
+    "httpx>=0.25.0",
+    "python-multipart>=0.0.6",
+    "pyyaml>=6.0.0",
+    "librosa>=0.10.0",
+    "psycopg2-binary>=2.9.10",
+    "torch>=2.7.1",
+    "starlette>=0.47.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+    "sphinx>=7.1.0",
+]
+
+[project.scripts]
+stable-squirrel = "stable_squirrel.__main__:main"
+
 [tool.black]
-line-length = 88
+line-length = 120
 
 [tool.isort]
 profile = "black"
 
 [tool.ruff]
-line-length = 88
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I001"]
-target-version = "py311"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true
 strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=stable_squirrel --cov-report=term-missing"
 

@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: stable-squirrel-db
+    environment:
+      - POSTGRES_DB=stable_squirrel
+      - POSTGRES_USER=stable_squirrel
+      - POSTGRES_PASSWORD=changeme
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stable_squirrel -d stable_squirrel"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  stable-squirrel:
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: stable-squirrel-app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./recordings:/app/recordings:ro
+      - stable-squirrel-logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+
+volumes:
+  timescaledb-data:
+    driver: local
+  stable-squirrel-logs:
+    driver: local

@@ -1,0 +1,87 @@
+## Stable Squirrel Development Rules
+
+### Package Management
+
+- **ALWAYS use `uv` for Python package management**
+- Never use `pip install` - use `uv add` or `uv pip install` within activated venv
+- When installing packages: `source .venv/bin/activate && uv add package-name`
+- When running commands: `source .venv/bin/activate && command`
+
+### Code Quality & Linting
+
+- **ALWAYS run linting tools with `--fix` flag when available**
+- Use `ruff check --fix` not `ruff check`
+- Use `black --check` for checking, `black .` for fixing
+- Line length is 120 characters (configured in pyproject.toml)
+
+### Audio File Validation
+
+- **ONLY allow MP3 files** for SDR audio processing
+- Do not add support for WAV, M4A, FLAC, OGG, AAC, or other formats
+- SDRTrunk only sends MP3 files - no other formats are needed
+
+### API Endpoints
+
+- RdioScanner API endpoint is `/api/call-upload` (SDRTrunk standard)
+- Do not change this to `/api/upload` or other variants
+- Maintain compatibility with SDRTrunk's expected response formats
+
+### Testing
+
+- Run tests frequently during development
+- Focus on RdioScanner API and security validation tests as priority
+- All security tests must pass before any changes are complete
+
+### Documentation
+
+- Update README.md when adding major features
+- Document API endpoints accurately
+- Include SDRTrunk configuration instructions
+
+### Database
+
+- Use TimescaleDB for time-series data
+- Do not suggest SQLite for production
+- Maintain proper Pydantic model validation
+
+### Security
+
+- Maintain multi-layered file validation
+- Keep rate limiting and malicious content detection
+- Conservative approach: reject questionable files rather than allow
+
+### Error Handling
+
+- Provide specific error messages for validation failures
+- Log warnings for debugging but raise exceptions for API errors
+- Return appropriate HTTP status codes (401, 400, 422, etc.)
+
+### Development Workflow
+
+1. Always activate venv: `source .venv/bin/activate`
+2. Use uv for dependencies: `uv add package-name`
+3. Run linting with fix: `ruff check --fix`
+4. Run tests: `python -m pytest`
+5. Update documentation if needed
+
+### Common Mistakes to Avoid
+
+- ❌ Using `pip install` instead of `uv add`
+- ❌ Running linting without `--fix` flag
+- ❌ Allowing non-MP3 file uploads
+- ❌ Changing RdioScanner endpoint path from `/api/call-upload`
+- ❌ Not updating documentation after major changes
+- ❌ Adding support for additional audio formats without explicit approval
+
+### Fast Commands
+
+```bash
+# Activate and test core functionality
+source .venv/bin/activate && python -m pytest tests/test_rdioscanner_api.py tests/test_security_validation.py -v
+
+# Fix linting
+source .venv/bin/activate && ruff check --fix src/ tests/
+
+# Add package
+source .venv/bin/activate && uv add package-name
+```
