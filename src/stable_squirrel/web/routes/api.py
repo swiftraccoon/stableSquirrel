@@ -1,6 +1,6 @@
 """Main API endpoints."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request

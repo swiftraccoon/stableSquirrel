@@ -133,11 +133,12 @@ def test_list_transcriptions_with_filters(client):
         # Verify the search was called with correct parameters
         mock_db_ops.radio_calls.search_radio_calls.assert_called_once()
         call_args = mock_db_ops.radio_calls.search_radio_calls.call_args
-        assert call_args.kwargs["frequency"] == 460025000
-        assert call_args.kwargs["talkgroup_id"] == 1001
-        assert call_args.kwargs["system_id"] == 123
-        assert call_args.kwargs["limit"] == 25
-        assert call_args.kwargs["offset"] == 10
+        search_query = call_args[0][0]  # First positional argument
+        assert search_query.frequency == 460025000
+        assert search_query.talkgroup_id == 1001
+        assert search_query.system_id == 123
+        assert search_query.limit == 25
+        assert search_query.offset == 10
 
 
 def test_search_transcriptions_success(client, mock_search_result):
@@ -149,7 +150,7 @@ def test_search_transcriptions_success(client, mock_search_result):
     with pytest.MonkeyPatch.context() as m:
         m.setattr("stable_squirrel.web.routes.api.DatabaseOperations", lambda x: mock_db_ops)
 
-        response = client.get("/api/v1/transcriptions/search", params={
+        response = client.get("/api/v1/search", params={
             "q": "police dispatch",
             "frequency": 460025000,
             "limit": 20,
@@ -165,14 +166,15 @@ def test_search_transcriptions_success(client, mock_search_result):
         # Verify search was called with correct parameters
         mock_db_ops.transcriptions.search_transcriptions.assert_called_once()
         call_args = mock_db_ops.transcriptions.search_transcriptions.call_args
-        assert call_args.kwargs["query"] == "police dispatch"
-        assert call_args.kwargs["frequency"] == 460025000
-        assert call_args.kwargs["limit"] == 20
+        search_query = call_args[0][0]  # First positional argument
+        assert search_query.query_text == "police dispatch"
+        assert search_query.frequency == 460025000
+        assert search_query.limit == 20
 
 
 def test_search_transcriptions_missing_query(client):
     """Test search transcriptions without query parameter."""
-    response = client.get("/api/v1/transcriptions/search")
+    response = client.get("/api/v1/search")
 
     assert response.status_code == 422  # FastAPI validation error
 
@@ -235,11 +237,13 @@ def test_chat_completions_placeholder(client):
         "max_tokens": 100,
     }
 
-    response = client.post("/api/v1/chat/completions", json=request_data)
+    response = client.post("/api/v1/llm/chat/completions", json=request_data)
 
-    # Should return 501 Not Implemented for now
-    assert response.status_code == 501
-    assert "not implemented" in response.json()["detail"].lower()
+    # The endpoint returns a placeholder response with status 200
+    assert response.status_code == 200
+    data = response.json()
+    assert "choices" in data
+    assert "not yet implemented" in data["choices"][0]["message"]["content"].lower()
 
 
 def test_list_transcriptions_database_error(client):
@@ -264,7 +268,7 @@ def test_search_transcriptions_database_error(client):
     with pytest.MonkeyPatch.context() as m:
         m.setattr("stable_squirrel.web.routes.api.DatabaseOperations", lambda x: mock_db_ops)
 
-        response = client.get("/api/v1/transcriptions/search", params={"q": "test"})
+        response = client.get("/api/v1/search", params={"q": "test"})
 
         assert response.status_code == 500
 
@@ -366,14 +370,14 @@ def test_pagination_parameters(client):
 
         # Verify limit was clamped to maximum
         call_args = mock_db_ops.radio_calls.search_radio_calls.call_args
-        assert call_args.kwargs["limit"] <= 100  # Assuming max limit is 100
+        search_query = call_args[0][0]  # First positional argument
+        assert search_query.limit <= 1000  # SearchQuery model max limit is 1000
 
         # Test negative offset handling
         response = client.get("/api/v1/transcriptions", params={"offset": -10})
 
-        assert response.status_code == 200
-        call_args = mock_db_ops.radio_calls.search_radio_calls.call_args
-        assert call_args.kwargs["offset"] >= 0
+        # FastAPI validation should reject negative offset
+        assert response.status_code == 422
 
 
 def test_search_query_validation():

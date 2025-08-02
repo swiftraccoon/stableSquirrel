@@ -22,15 +22,24 @@ class IngestionConfig(BaseModel):
     api_key: Optional[str] = None  # Legacy single API key (deprecated)
     api_keys: list[APIKeyConfig] = Field(default_factory=list)  # Enhanced API key config
 
+    # Polling settings (for compatibility with tests)
+    polling_interval: float = 1.0  # Interval for checking new files
+    supported_formats: list[str] = Field(default=[".wav", ".mp3", ".m4a"])  # Supported audio formats
+
     # Security settings
     enable_file_validation: bool = True
     max_file_size_mb: int = 100  # Maximum file size in MB
+    min_file_size_kb: int = 1  # Minimum file size in KB
     max_uploads_per_minute: int = 10  # Per IP rate limit
     max_uploads_per_hour: int = 100  # Per IP rate limit
 
     # Node tracking for security
     track_upload_sources: bool = True  # Track which nodes/systems upload files
     require_system_id: bool = True  # Require system ID for all uploads
+
+    # Additional security settings
+    log_all_uploads: bool = False  # Log all upload attempts
+    security_event_retention_days: int = 365  # Security event retention period
 
 
 

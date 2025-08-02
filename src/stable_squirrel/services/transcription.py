@@ -461,7 +461,7 @@ class TranscriptionService:
 
             logger.info(
                 f"Successfully stored transcription for call "
-                f"{stored_result['radio_call'].call_id}"
+                f"{stored_result['radio_call']['call_id']}"
             )
 
         except Exception as e:

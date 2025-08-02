@@ -96,12 +96,18 @@ async def main() -> None:
         logger.info(f"Starting web server on {host}:{port}")
         logger.info(f"RdioScanner API available at: http://{host}:{port}/api/call-upload")
 
-        # Start web server
-        import uvicorn
+        # Start web server with Hypercorn for HTTP/2 support
+        from hypercorn.config import Config as HypercornConfig
+        from hypercorn.asyncio import serve
 
-        config = uvicorn.Config(app, host=host, port=port, log_config=None)
-        server = uvicorn.Server(config)
-        await server.serve()
+        config = HypercornConfig()
+        config.application_path = "app"
+        config.bind = [f"{host}:{port}"]
+        config.use_reloader = False
+        config.debug = False
+        config.access_log_format = "%(h)s %(r)s %(s)s %(b)s %(D)s"
+        
+        await serve(app, config)
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")

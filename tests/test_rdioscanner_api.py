@@ -24,6 +24,7 @@ def app():
 
     app.state.config = config
     app.state.transcription_service = AsyncMock()
+    app.state.db_manager = AsyncMock()  # Add mock db_manager
 
     return app
 
@@ -241,6 +242,7 @@ def test_process_rdioscanner_call():
     import tempfile
     from pathlib import Path
 
+    from stable_squirrel.services.task_queue import initialize_task_queue, shutdown_task_queue
     from stable_squirrel.web.routes.rdioscanner import RdioScannerUpload, process_rdioscanner_call
 
     # Create test data
@@ -262,16 +264,39 @@ def test_process_rdioscanner_call():
     # Test the function
     with tempfile.NamedTemporaryFile(suffix=".wav") as temp_file:
         import asyncio
-        asyncio.run(process_rdioscanner_call(
-            upload_data,
-            Path(temp_file.name),
-            mock_service,
-            "127.0.0.1",  # client_ip
-            "test-key",   # api_key_id
-            "test-agent"  # user_agent
-        ))
 
-        # Verify transcription service was called
+        async def run_test():
+            # Initialize task queue
+            queue = initialize_task_queue()
+
+            # Mock transcription processor
+            async def mock_processor(task):
+                return {"transcript": "test transcript"}
+
+            await queue.start(mock_processor)
+
+            try:
+                # Mock the task queue to be full so it falls back to direct transcription
+                with patch("stable_squirrel.services.task_queue.get_task_queue") as mock_get_queue:
+                    mock_queue = AsyncMock()
+                    mock_queue.enqueue_task.side_effect = ValueError("Queue is full")
+                    mock_get_queue.return_value = mock_queue
+
+                    await process_rdioscanner_call(
+                        upload_data,
+                        Path(temp_file.name),
+                        mock_service,
+                        "127.0.0.1",  # client_ip
+                        "test-key",   # api_key_id
+                        "test-agent"  # user_agent
+                    )
+            finally:
+                # Cleanup
+                await shutdown_task_queue()
+
+        asyncio.run(run_test())
+
+        # Verify transcription service was called (fallback path)
         mock_service.transcribe_rdioscanner_call.assert_called_once()
 
 

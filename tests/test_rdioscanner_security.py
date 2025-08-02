@@ -27,6 +27,7 @@ def security_enabled_app():
 
     app.state.config = config
     app.state.transcription_service = AsyncMock()
+    app.state.db_manager = AsyncMock()  # Add mock db_manager
 
     return app
 

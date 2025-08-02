@@ -25,8 +25,10 @@ router = APIRouter()
 def parse_multipart_manually(content_type: str, body: bytes) -> dict:
     """
     Manually parse multipart form data from raw bytes.
-    This handles cases where FastAPI's form parsing fails due to HTTP/2 upgrade issues.
+    Fallback parser for edge cases where FastAPI's form parsing might fail.
     """
+    logger.info(f"Manual parsing started - Content-Type: {content_type}, Body size: {len(body)}")
+    
     if not content_type or not content_type.startswith('multipart/form-data'):
         logger.error(f"Invalid content-type: {content_type}")
         return {}
@@ -145,7 +147,7 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
         else:
             logger.warning(f"No field name found in part {i}")
 
-    logger.debug(f"Parsed {len(fields)} fields total")
+    logger.info(f"Manual parsing complete - Parsed {len(fields)} fields total: {list(fields.keys())}")
     return fields
 
 
@@ -427,21 +429,16 @@ async def upload_call(request: Request) -> Response:
         raw_body = await request.body()
         logger.debug(f"Raw body size: {len(raw_body)} bytes")
 
-        # Handle different content types
-        is_http2_upgrade = 'upgrade' in request.headers and request.headers['upgrade'] == 'h2c'
-        content_type = request.headers.get('content-type', '')
-        
-        logger.info(f"Content-Type: {content_type}")
-        logger.info(f"HTTP2 upgrade: {is_http2_upgrade}")
-        logger.info(f"Request headers: {dict(request.headers)}")
-
-        if 'multipart/form-data' in content_type and not is_http2_upgrade:
-            logger.info("Using manual multipart parsing")
-            form_data = parse_multipart_manually(content_type, raw_body)
-        else:
-            logger.info("Using FastAPI form parsing")
+        # Use FastAPI's built-in form parsing (Hypercorn handles HTTP/2 properly)
+        try:
             fastapi_form = await request.form()
             form_data = dict(fastapi_form)
+            logger.debug(f"FastAPI form parsing successful: {len(form_data)} fields")
+        except Exception as e:
+            logger.warning(f"FastAPI form parsing failed, trying manual parsing: {e}")
+            # Fallback to manual parsing if needed
+            content_type = request.headers.get('content-type', '')
+            form_data = parse_multipart_manually(content_type, raw_body)
 
         # Extract core fields
         key = form_data.get("key")
@@ -450,8 +447,8 @@ async def upload_call(request: Request) -> Response:
         test = int(test_str) if test_str else None
         audio = form_data.get("audio")
 
-        logger.info(f"Parsed form fields: {list(form_data.keys())}")
-        logger.info(f"Key: {key}, System: {system}, Test: {test}")
+        logger.debug(f"Parsed form fields: {list(form_data.keys())}")
+        logger.debug(f"Key: {key}, System: {system}, Test: {test}")
 
         # Handle test requests first
         if test is not None:
@@ -561,12 +558,9 @@ async def upload_call(request: Request) -> Response:
         raise HTTPException(status_code=500, detail="Internal server error")
 
     finally:
-        # Clean up temporary file
-        if temp_file_path:
-            try:
-                temp_file_path.unlink()
-            except Exception as e:
-                logger.warning(f"Failed to clean up temporary file {temp_file_path}: {e}")
+        # Note: Temp file cleanup is handled by the transcription service after processing
+        # Don't delete temp_file_path here as background tasks need it
+        pass
 
 
 async def process_rdioscanner_call(
@@ -606,6 +600,7 @@ async def process_rdioscanner_call(
         )
 
         # Queue for background transcription processing
+        queue_success = False
         try:
             from stable_squirrel.services.task_queue import get_task_queue
             task_queue = get_task_queue()
@@ -615,13 +610,23 @@ async def process_rdioscanner_call(
                 f"RdioScanner call queued for transcription: {upload_data.audio_filename} "
                 f"(Task ID: {task_id})"
             )
+            queue_success = True
 
         except ValueError as e:
             # Queue is full - fall back to immediate processing
             logger.warning(f"Task queue full, processing immediately: {e}")
-            await transcription_service.transcribe_rdioscanner_call(
-                audio_file_path, radio_call
-            )
+            try:
+                await transcription_service.transcribe_rdioscanner_call(
+                    audio_file_path, radio_call
+                )
+            finally:
+                # Clean up temp file for immediate processing (background worker won't handle it)
+                try:
+                    if audio_file_path.exists():
+                        audio_file_path.unlink()
+                        logger.debug(f"Cleaned up temp file after immediate processing: {audio_file_path}")
+                except Exception as cleanup_e:
+                    logger.warning(f"Failed to cleanup temp file {audio_file_path}: {cleanup_e}")
 
         logger.info(
             f"RdioScanner call processed successfully: {upload_data.audio_filename}"
