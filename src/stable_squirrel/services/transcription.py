@@ -30,6 +30,7 @@ WhisperResult = Dict[str, Any]  # WhisperX transcription result
 
 class AudioMetadata(TypedDict):
     """Audio file metadata."""
+
     duration: float
     format: str
     size_bytes: int

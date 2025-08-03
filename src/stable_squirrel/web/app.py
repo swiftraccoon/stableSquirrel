@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 class SystemHealth(TypedDict):
     """TypedDict for system health information."""
+
     status: str
     database: dict[str, Union[str, int, bool]]
     task_queue: dict[str, Union[str, int, bool, float]]
@@ -117,6 +118,7 @@ def create_app(
 
             # Get memory info
             import psutil
+
             process = psutil.Process()
             memory_info = process.memory_info()
 

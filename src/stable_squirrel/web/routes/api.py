@@ -19,6 +19,7 @@ router = APIRouter()
 
 class ChatRequest(TypedDict, total=False):
     """TypedDict for chat completion request."""
+
     messages: list[dict[str, str]]
     model: str
     temperature: float
@@ -27,6 +28,7 @@ class ChatRequest(TypedDict, total=False):
 
 class ChatResponse(TypedDict):
     """TypedDict for chat completion response."""
+
     choices: list[dict[str, Union[dict[str, str], str]]]
     model: str
     usage: dict[str, int]

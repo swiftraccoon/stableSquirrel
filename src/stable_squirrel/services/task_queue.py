@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class TaskDict(TypedDict):
     """TypedDict for serialized task data."""
+
     task_id: str
     call_data: Optional[dict[str, Union[str, int, float, None]]]
     audio_file_path: Optional[str]
@@ -36,6 +37,7 @@ class TaskDict(TypedDict):
 
 class QueueStats(TypedDict):
     """TypedDict for queue statistics."""
+
     total_enqueued: int
     total_processed: int
     total_failed: int

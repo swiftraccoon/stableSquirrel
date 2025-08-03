@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class PoolStats(TypedDict):
     """TypedDict for connection pool statistics."""
+
     status: str
     min_size: int
     max_size: int
