@@ -4,7 +4,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypedDict
 
 import whisperx
 
@@ -21,6 +21,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Type aliases for external WhisperX models that don't have type stubs
+WhisperModel = Any  # whisperx.load_model() return type
+AlignModel = Any  # whisperx.load_align_model() return type
+DiarizeModel = Any  # whisperx.DiarizationPipeline type
+WhisperResult = Dict[str, Any]  # WhisperX transcription result
+
+
+class AudioMetadata(TypedDict):
+    """Audio file metadata."""
+    duration: float
+    format: str
+    size_bytes: int
+    filename: str
+
 
 class TranscriptionService:
     """Service for transcribing audio files using WhisperX."""
@@ -29,10 +43,10 @@ class TranscriptionService:
         self.config = config
         self.db_manager = db_manager
         self.db_ops = DatabaseOperations(db_manager)
-        self._model: Optional[Any] = None
-        self._diarize_model: Optional[Any] = None
-        self._align_model: Optional[Any] = None
-        self._metadata: Optional[Dict[str, Any]] = None
+        self._model: Optional[WhisperModel] = None
+        self._diarize_model: Optional[DiarizeModel] = None
+        self._align_model: Optional[AlignModel] = None
+        self._metadata: Optional[Dict[str, Any]] = None  # Language metadata from align model
         self._running = False
 
     async def start(self) -> None:
@@ -133,7 +147,7 @@ class TranscriptionService:
             logger.error(f"Failed to load WhisperX models: {e}")
             raise
 
-    async def transcribe_file(self, file_path: Path) -> Dict[str, Any]:
+    async def transcribe_file(self, file_path: Path) -> WhisperResult:
         """Transcribe an audio file using WhisperX."""
         if not self._running or not self._model:
             raise RuntimeError("Transcription service not ready")
@@ -189,7 +203,7 @@ class TranscriptionService:
             logger.error(f"Error transcribing file {file_path}: {e}")
             raise
 
-    async def _extract_audio_metadata(self, file_path: Path) -> Dict[str, Any]:
+    async def _extract_audio_metadata(self, file_path: Path) -> AudioMetadata:
         """Extract metadata from audio file."""
         try:
             # Use librosa or similar to get audio info
@@ -226,12 +240,12 @@ class TranscriptionService:
 
     async def _process_transcription_result(
         self,
-        whisper_result: Dict[str, Any],
+        whisper_result: WhisperResult,
         file_path: Path,
-        audio_info: Dict[str, Any],
+        audio_info: AudioMetadata,
         detected_language: str,
         processing_time: float,
-    ) -> Dict[str, Any]:
+    ) -> WhisperResult:
         """Process WhisperX result into our standardized format."""
 
         # Create radio call record first to get call_id
@@ -292,14 +306,14 @@ class TranscriptionService:
         if not segments:
             return None
 
-        confidences = [float(seg.get("confidence")) for seg in segments if seg.get("confidence") is not None]
+        confidences = [float(seg.get("confidence", 0)) for seg in segments if seg.get("confidence") is not None]
 
         if not confidences:
             return None
 
         return sum(confidences) / len(confidences)
 
-    async def transcribe_rdioscanner_call(self, file_path: Path, radio_call: RadioCallCreate) -> Dict[str, Any]:
+    async def transcribe_rdioscanner_call(self, file_path: Path, radio_call: RadioCallCreate) -> WhisperResult:
         """Transcribe an RdioScanner call with provided metadata."""
         if not self._running or not self._model:
             raise RuntimeError("Transcription service not ready")
@@ -364,12 +378,12 @@ class TranscriptionService:
 
     async def _process_rdioscanner_result(
         self,
-        whisper_result: Dict[str, Any],
+        whisper_result: WhisperResult,
         radio_call: RadioCallCreate,
-        audio_info: Dict[str, Any],
+        audio_info: AudioMetadata,
         detected_language: str,
         processing_time: float,
-    ) -> Dict[str, Any]:
+    ) -> WhisperResult:
         """Process WhisperX result for RdioScanner call."""
 
         # Extract segments
@@ -420,7 +434,7 @@ class TranscriptionService:
             "processing_time": processing_time,
         }
 
-    async def _store_transcription(self, result: Dict[str, Any]) -> None:
+    async def _store_transcription(self, result: WhisperResult) -> None:
         """Store transcription result in database."""
         try:
             radio_call = result["radio_call"]
@@ -440,7 +454,7 @@ class TranscriptionService:
             logger.error(f"Error storing transcription: {e}")
             raise
 
-    async def _process_queued_transcription(self, call_data: RadioCallCreate, audio_file_path: Path):
+    async def _process_queued_transcription(self, audio_file_path: Path, call_data: RadioCallCreate) -> None:
         """
         Process a transcription task from the background queue.
 

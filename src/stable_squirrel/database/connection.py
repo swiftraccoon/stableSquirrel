@@ -2,13 +2,27 @@
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, Optional
+from datetime import datetime
+from typing import Any, AsyncGenerator, Optional, TypedDict, Union
+from uuid import UUID
 
 import asyncpg
 
 from stable_squirrel.config import DatabaseConfig
 
+# Type alias for database query arguments
+DBArg = Union[str, int, float, bool, None, bytes, datetime, UUID]
+
 logger = logging.getLogger(__name__)
+
+
+class PoolStats(TypedDict):
+    """TypedDict for connection pool statistics."""
+    status: str
+    min_size: int
+    max_size: int
+    size: int
+    idle_connections: int
 
 
 class DatabaseManager:
@@ -73,37 +87,39 @@ class DatabaseManager:
             raise RuntimeError("Database not initialized - call initialize() first")
         return self._pool
 
-    async def execute(self, query: str, *args: Any) -> str:
+    async def execute(self, query: str, *args: DBArg) -> str:
         """Execute a query and return status."""
         async with self.pool.acquire() as conn:
-            return await conn.execute(query, *args)
+            result = await conn.execute(query, *args)
+            return str(result)
 
-    async def fetch(self, query: str, *args: Any) -> list[Any]:
+    async def fetch(self, query: str, *args: DBArg) -> list[asyncpg.Record]:
         """Fetch multiple rows."""
         async with self.pool.acquire() as conn:
-            return await conn.fetch(query, *args)
+            rows = await conn.fetch(query, *args)
+            return list(rows)
 
-    async def fetchrow(self, query: str, *args: Any) -> Optional[asyncpg.Record]:
+    async def fetchrow(self, query: str, *args: DBArg) -> Optional[asyncpg.Record]:
         """Fetch single row."""
         async with self.pool.acquire() as conn:
             return await conn.fetchrow(query, *args)
 
-    async def fetchval(self, query: str, *args: Any) -> Any:
+    async def fetchval(self, query: str, *args: DBArg) -> Any:
         """Fetch single value."""
         async with self.pool.acquire() as conn:
             return await conn.fetchval(query, *args)
 
     @asynccontextmanager
-    async def transaction(self) -> AsyncContextManager[asyncpg.Connection]:
+    async def transaction(self) -> AsyncGenerator[asyncpg.Connection, None]:
         """Get a database connection with transaction management."""
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 yield conn
 
-    async def execute_transaction(self, operations: list[tuple[str, tuple]]) -> list[Any]:
+    async def execute_transaction(self, operations: list[tuple[str, tuple[DBArg, ...]]]) -> list[str]:
         """Execute multiple operations in a single transaction."""
         async with self.transaction() as conn:
-            results = []
+            results: list[str] = []
             for query, args in operations:
                 result = await conn.execute(query, *args)
                 results.append(result)
@@ -118,15 +134,21 @@ class DatabaseManager:
             logger.error(f"Database health check failed: {e}")
             return False
 
-    def get_pool_stats(self) -> dict:
+    def get_pool_stats(self) -> PoolStats:
         """Get connection pool statistics."""
         if not self._pool:
-            return {"status": "not_initialized"}
+            return PoolStats(
+                status="not_initialized",
+                min_size=0,
+                max_size=0,
+                size=0,
+                idle_connections=0,
+            )
 
-        return {
-            "status": "active",
-            "size": self._pool.get_size(),
-            "max_size": self._pool.get_max_size(),
-            "min_size": self._pool.get_min_size(),
-            "idle_connections": self._pool.get_idle_size(),
-        }
+        return PoolStats(
+            status="active",
+            size=self._pool.get_size(),
+            max_size=self._pool.get_max_size(),
+            min_size=self._pool.get_min_size(),
+            idle_connections=self._pool.get_idle_size(),
+        )

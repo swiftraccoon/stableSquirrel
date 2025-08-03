@@ -1,6 +1,6 @@
 """Main API endpoints."""
 
-from typing import Any, Dict
+from typing import TypedDict, Union
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -15,6 +15,21 @@ from stable_squirrel.database.models import (
 from stable_squirrel.database.operations import DatabaseOperations
 
 router = APIRouter()
+
+
+class ChatRequest(TypedDict, total=False):
+    """TypedDict for chat completion request."""
+    messages: list[dict[str, str]]
+    model: str
+    temperature: float
+    max_tokens: int
+
+
+class ChatResponse(TypedDict):
+    """TypedDict for chat completion response."""
+    choices: list[dict[str, Union[dict[str, str], str]]]
+    model: str
+    usage: dict[str, int]
 
 
 class SearchRequest(BaseModel):
@@ -173,12 +188,12 @@ async def get_transcription(
 @router.post("/llm/chat/completions")
 async def llm_chat_completions(
     request: Request,
-    chat_request: Dict[str, Any],
-) -> Dict[str, Any]:
+    chat_request: ChatRequest,
+) -> ChatResponse:
     """OpenAI-compatible chat completions endpoint."""
     # TODO: Implement LLM functionality
-    return {
-        "choices": [
+    return ChatResponse(
+        choices=[
             {
                 "message": {
                     "role": "assistant",
@@ -187,6 +202,6 @@ async def llm_chat_completions(
                 "finish_reason": "stop",
             }
         ],
-        "model": "stable-squirrel-v0.1",
-        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-    }
+        model="stable-squirrel-v0.1",
+        usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    )

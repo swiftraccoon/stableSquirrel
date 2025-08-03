@@ -1,7 +1,7 @@
 """Enhanced authentication and security service."""
 
 import logging
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple, cast
 from uuid import UUID
 
 from stable_squirrel.config import IngestionConfig
@@ -19,7 +19,7 @@ class SecurityAuthService:
     def __init__(self, config: IngestionConfig, security_ops: Optional["SecurityEventOperations"] = None):
         self.config = config
         self.security_ops = security_ops
-        self._security_events = []  # Fallback in-memory storage if no DB operations provided
+        self._security_events: list[SecurityEvent] = []  # Fallback in-memory storage if no DB operations provided
 
     async def validate_api_key(
         self, api_key: str, client_ip: str, system_id: Optional[str] = None, user_agent: Optional[str] = None
@@ -152,7 +152,7 @@ class SecurityAuthService:
         api_key_used: Optional[str] = None,
         user_agent: Optional[str] = None,
         description: str = "",
-        metadata: Optional[dict] = None,
+        metadata: Optional[dict[str, Any]] = None,
         related_call_id: Optional[str] = None,
         related_file_path: Optional[str] = None,
     ) -> SecurityEvent:
@@ -229,13 +229,15 @@ class SecurityAuthService:
         events.sort(key=lambda e: e.timestamp, reverse=True)
         return events[:limit]
 
-    async def get_upload_source_analysis(self, system_id: str) -> dict:
+    async def get_upload_source_analysis(self, system_id: str) -> dict[str, Any]:
         """Analyze upload patterns for a specific source system."""
 
         # Use database if available, otherwise fall back to memory
         if self.security_ops:
             try:
-                return await self.security_ops.get_upload_source_analysis(system_id)
+                # Cast to dict since the method signature needs to remain generic for compatibility
+                result = await self.security_ops.get_upload_source_analysis(system_id)
+                return cast(dict[str, Any], result)
             except Exception as e:
                 logger.warning(f"Failed to retrieve upload analysis from database: {e}")
 

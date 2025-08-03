@@ -70,3 +70,8 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--cov=stable_squirrel --cov-report=term-missing"
 
+[dependency-groups]
+dev = [
+    "types-aiofiles>=24.1.0.20250801",
+]
+

@@ -3,7 +3,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional, TypedDict
 from uuid import UUID
 
 from stable_squirrel.database.connection import DatabaseManager
@@ -17,6 +17,25 @@ from stable_squirrel.database.models import (
     Transcription,
     TranscriptionCreate,
 )
+
+
+class TranscriptionStoreResult(TypedDict):
+    """Result of storing a complete transcription."""
+
+    radio_call: dict[str, Any]
+    transcription: dict[str, Any]
+    speaker_segments: list[dict[str, Any]]
+
+
+class UploadSourceAnalysis(TypedDict):
+    """Analysis of upload patterns for a source system."""
+
+    system_id: str
+    upload_statistics: dict[str, Any]
+    security_statistics: dict[str, Any]
+    ip_addresses: list[dict[str, Any]]
+    recent_events: list[SecurityEvent]
+
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +121,7 @@ class RadioCallOperations:
     async def search_radio_calls(self, search_query: SearchQuery) -> List[RadioCall]:
         """Search radio calls with filters."""
         conditions = ["1=1"]  # Base condition
-        params = []
+        params: list[Any] = []
         param_count = 0
 
         # Build dynamic WHERE clause
@@ -202,7 +221,7 @@ class TranscriptionOperations:
     async def search_transcriptions(self, search_query: SearchQuery) -> List[SearchResult]:
         """Search transcriptions with full-text search."""
         conditions = ["rc.call_id = t.call_id"]
-        params = []
+        params: list[Any] = []
         param_count = 0
 
         # Text search using PostgreSQL full-text search
@@ -289,7 +308,7 @@ class SpeakerSegmentOperations:
 
         # Build bulk insert query
         value_placeholders = []
-        params = []
+        params: list[Any] = []
         param_count = 0
 
         for segment in segments:
@@ -362,7 +381,7 @@ class DatabaseOperations:
         radio_call: RadioCallCreate,
         transcription: TranscriptionCreate,
         speaker_segments: List[SpeakerSegment],
-    ) -> Dict[str, Any]:
+    ) -> TranscriptionStoreResult:
         """Store a complete transcription result atomically with proper rollback."""
         async with self.db.transaction() as conn:
             try:
@@ -529,7 +548,7 @@ class SecurityEventOperations:
     ) -> List[SecurityEvent]:
         """Get security events with filtering."""
         where_conditions = []
-        params = []
+        params: list[Any] = []
         param_index = 1
 
         if event_type:
@@ -592,7 +611,7 @@ class SecurityEventOperations:
 
         return results
 
-    async def get_upload_source_analysis(self, source_system: str) -> Dict[str, Any]:
+    async def get_upload_source_analysis(self, source_system: str) -> UploadSourceAnalysis:
         """Analyze upload patterns for a specific source system."""
         # Get upload statistics
         upload_stats_query = """

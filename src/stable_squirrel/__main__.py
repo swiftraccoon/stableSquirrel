@@ -105,7 +105,7 @@ async def main() -> None:
         hypercorn_config.debug = False
         hypercorn_config.access_log_format = "%(h)s %(r)s %(s)s %(b)s %(D)s"
 
-        await serve(app, hypercorn_config)
+        await serve(app, hypercorn_config)  # type: ignore[arg-type]
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")

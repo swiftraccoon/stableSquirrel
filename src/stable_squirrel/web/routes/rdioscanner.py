@@ -4,9 +4,10 @@ import logging
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, Union
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from stable_squirrel.security import (
@@ -16,13 +17,35 @@ from stable_squirrel.security import (
     configure_validator,
     validate_audio_file,
 )
+from stable_squirrel.services.transcription import TranscriptionService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def parse_multipart_manually(content_type: str, body: bytes) -> dict:
+class SimpleUploadFile:
+    """Simple file upload container for manual multipart parsing."""
+
+    def __init__(self, filename: str, content_type: Optional[str], content: bytes) -> None:
+        self.filename = filename
+        self.content_type = content_type
+        self.content = content
+        self.size = len(content)
+
+    async def read(self) -> bytes:
+        return self.content
+
+    def __bool__(self) -> bool:
+        """Check if file has content."""
+        return bool(self.content)
+
+
+# Type alias for form data fields
+FormFieldValue = Union[str, SimpleUploadFile]
+
+
+def parse_multipart_manually(content_type: str, body: bytes) -> dict[str, FormFieldValue]:
     """
     Manually parse multipart form data from raw bytes.
     Fallback parser for edge cases where FastAPI's form parsing might fail.
@@ -49,45 +72,45 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
     logger.debug(f"Body size: {len(body)} bytes")
 
     # Parse multipart data manually
-    fields = {}
+    fields: dict[str, FormFieldValue] = {}
     boundary_bytes = f"--{boundary}".encode()
 
-    logger.debug(f"Looking for boundary: {boundary_bytes}")
+    logger.debug(f"Looking for boundary: {boundary_bytes!r}")
 
     # Split by boundary
     parts = body.split(boundary_bytes)
     logger.debug(f"Found {len(parts)} parts after splitting by boundary")
 
-    for i, part in enumerate(parts):
-        logger.debug(f"Processing part {i}: {len(part)} bytes")
-        if i == 0:
+    for idx, part in enumerate(parts):  # type: ignore[assignment]
+        logger.debug(f"Processing part {idx}: {len(part)} bytes")
+        if idx == 0:
             # First part is usually empty or just preamble
-            logger.debug(f"Skipping first part (preamble): {part[:50]}...")
+            logger.debug(f"Skipping first part (preamble): {part[:50]!r}...")
             continue
 
-        if part.strip() == b"--" or part.strip() == b"":
+        if part.strip() in (b"--", b""):  # type: ignore[comparison-overlap]
             # Last part with closing boundary marker
-            logger.debug(f"Skipping closing part: {part}")
+            logger.debug(f"Skipping closing part: {part!r}")
             continue
 
-        logger.debug(f"Part {i} content preview: {part[:200]}...")
+        logger.debug(f"Part {idx} content preview: {part[:200]!r}...")
 
         # Find the headers/body separator
-        headers_section = None
-        body_section = None
+        headers_section: Optional[bytes] = None
+        body_section: Optional[bytes] = None
 
-        if b"\r\n\r\n" in part:
-            headers_section, body_section = part.split(b"\r\n\r\n", 1)
+        if b"\r\n\r\n" in part:  # type: ignore[operator]
+            headers_section, body_section = part.split(b"\r\n\r\n", 1)  # type: ignore[assignment,arg-type]
             logger.debug("Found \\r\\n\\r\\n separator")
-        elif b"\n\n" in part:
-            headers_section, body_section = part.split(b"\n\n", 1)
+        elif b"\n\n" in part:  # type: ignore[operator]
+            headers_section, body_section = part.split(b"\n\n", 1)  # type: ignore[assignment,arg-type]
             logger.debug("Found \\n\\n separator")
         else:
-            logger.warning(f"No header/body separator found in part {i}")
+            logger.warning(f"No header/body separator found in part {idx}")
             continue
 
         # Parse headers
-        headers_text = headers_section.decode("utf-8", errors="ignore").strip()
+        headers_text = headers_section.decode("utf-8", errors="ignore").strip()  # type: ignore[union-attr]
         logger.debug(f"Headers text: {repr(headers_text)}")
 
         field_name = None
@@ -115,7 +138,7 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
 
         if field_name:
             # Clean up body section (remove leading/trailing whitespace)
-            body_section = body_section.rstrip(b"\r\n").rstrip(b"\n")
+            body_section = body_section.rstrip(b"\r\n").rstrip(b"\n")  # type: ignore[union-attr]
 
             if filename:
                 # This is a file field
@@ -128,16 +151,6 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
                 )
 
                 # Create a simple file-like object
-                class SimpleUploadFile:
-                    def __init__(self, filename, content_type, content):
-                        self.filename = filename
-                        self.content_type = content_type
-                        self.content = content
-                        self.size = len(content)
-
-                    async def read(self):
-                        return self.content
-
                 fields[field_name] = SimpleUploadFile(filename, content_type_field, body_section)
             else:
                 # This is a regular field
@@ -145,7 +158,7 @@ def parse_multipart_manually(content_type: str, body: bytes) -> dict:
                 logger.debug(f"Found field '{field_name}': {value}")
                 fields[field_name] = value
         else:
-            logger.warning(f"No field name found in part {i}")
+            logger.warning(f"No field name found in part {idx}")
 
     logger.info(f"Manual parsing complete - Parsed {len(fields)} fields total: {list(fields.keys())}")
     return fields
@@ -236,7 +249,7 @@ async def validate_api_key_and_permissions(
 
 
 async def validate_request_data(
-    request: Request, form_data: dict, test: Optional[int], client_ip: str, user_agent: str
+    request: Request, form_data: dict[str, Any], test: Optional[int], client_ip: str, user_agent: str
 ) -> tuple[bool, Optional[str]]:
     """
     Validate required request data and business rules.
@@ -268,7 +281,12 @@ async def validate_request_data(
 
 
 async def perform_file_security_validation(
-    request: Request, audio, client_ip: str, api_key_id: Optional[str], system: Optional[str], user_agent: str
+    request: Request,
+    audio: Union[SimpleUploadFile, UploadFile, None],
+    client_ip: str,
+    api_key_id: Optional[str],
+    system: Optional[str],
+    user_agent: str,
 ) -> tuple[bool, Optional[str]]:
     """
     Perform comprehensive file security validation.
@@ -291,7 +309,16 @@ async def perform_file_security_validation(
         configure_validator(security_config)
 
         # Validate the uploaded file
-        await validate_audio_file(audio, client_ip)
+        # If it's our SimpleUploadFile, we need to convert it for validation
+        if isinstance(audio, SimpleUploadFile):
+            # Create a mock UploadFile for validation
+            from io import BytesIO
+
+            upload_file = UploadFile(filename=audio.filename, file=BytesIO(audio.content))
+            upload_file.content_type = audio.content_type or "application/octet-stream"
+            await validate_audio_file(upload_file, client_ip)
+        else:
+            await validate_audio_file(audio, client_ip)
 
         # Log successful validation
         if config.ingestion.track_upload_sources:
@@ -335,7 +362,7 @@ async def perform_file_security_validation(
 
 
 def create_upload_data_model(
-    form_data: dict, client_ip: str, api_key_id: Optional[str], user_agent: str
+    form_data: dict[str, Any], client_ip: str, api_key_id: Optional[str], user_agent: str
 ) -> RdioScannerUpload:
     """Create RdioScannerUpload model from form data with security tracking."""
 
@@ -449,9 +476,22 @@ async def upload_call(request: Request) -> Response:
         logger.debug(f"Raw body size: {len(raw_body)} bytes")
 
         # Use FastAPI's built-in form parsing (Hypercorn handles HTTP/2 properly)
+        form_data: dict[str, Any]
         try:
+            from fastapi import UploadFile
+
             fastapi_form = await request.form()
-            form_data = dict(fastapi_form)
+            # Convert FastAPI form to our expected format
+            form_data = {}
+            for key, value in fastapi_form.items():
+                if isinstance(value, UploadFile):
+                    # Convert UploadFile to SimpleUploadFile
+                    content = await value.read()
+                    form_data[key] = SimpleUploadFile(
+                        filename=value.filename or "unknown", content_type=value.content_type, content=content
+                    )
+                else:
+                    form_data[key] = value
             logger.debug(f"FastAPI form parsing successful: {len(form_data)} fields")
         except Exception as e:
             logger.warning(f"FastAPI form parsing failed, trying manual parsing: {e}")
@@ -460,11 +500,25 @@ async def upload_call(request: Request) -> Response:
             form_data = parse_multipart_manually(content_type, raw_body)
 
         # Extract core fields
-        key = form_data.get("key")
-        system = form_data.get("system")
-        test_str = form_data.get("test")
+        key_raw = form_data.get("key")
+        key = str(key_raw) if key_raw and not isinstance(key_raw, SimpleUploadFile) else ""
+        system_raw = form_data.get("system")
+        system = str(system_raw) if system_raw and not isinstance(system_raw, SimpleUploadFile) else None
+        test_str_raw = form_data.get("test")
+        test_str = str(test_str_raw) if test_str_raw and not isinstance(test_str_raw, SimpleUploadFile) else None
         test = int(test_str) if test_str else None
-        audio = form_data.get("audio")
+        audio_raw = form_data.get("audio")
+        # Ensure audio is actually a file upload, not a string
+        # Accept any object with a read method as well (for test compatibility)
+        audio: Optional[Union[SimpleUploadFile, UploadFile]] = None
+        if isinstance(audio_raw, (SimpleUploadFile, UploadFile)):
+            audio = audio_raw
+        elif hasattr(audio_raw, "read"):
+            # For test compatibility - treat objects with read method as SimpleUploadFile
+            if hasattr(audio_raw, "filename") and hasattr(audio_raw, "content_type"):
+                audio = audio_raw  # type: ignore[assignment]
+        else:
+            audio = None
 
         logger.debug(f"Parsed form fields: {list(form_data.keys())}")
         logger.debug(f"Key: {key}, System: {system}, Test: {test}")
@@ -476,12 +530,13 @@ async def upload_call(request: Request) -> Response:
             test_message = "incomplete call data: no talkgroup"
 
             if wants_json:
-                return {"status": "ok", "message": test_message, "callId": "test"}
+                return JSONResponse({"status": "ok", "message": test_message, "callId": "test"})
             else:
                 return Response(content=test_message, media_type="text/plain")
 
         # Enhanced API key validation with IP restrictions
         config = request.app.state.config
+        api_key_id: Optional[str] = None
 
         # Check if any authentication is required
         has_legacy_key = bool(config.ingestion.api_key)
@@ -498,9 +553,10 @@ async def upload_call(request: Request) -> Response:
             else:
                 # Use enhanced API key validation
                 if key and system:
-                    is_valid, api_key_id, error_msg = await validate_api_key_and_permissions(
+                    is_valid, api_key_id_or_none, error_msg = await validate_api_key_and_permissions(
                         request, key, system, client_ip, user_agent
                     )
+                    api_key_id = api_key_id_or_none
                 else:
                     is_valid, api_key_id, error_msg = False, None, "Missing API key or system ID"
                 if not is_valid:
@@ -563,11 +619,13 @@ async def upload_call(request: Request) -> Response:
         wants_json = determine_response_format(request)
 
         if wants_json:
-            return {
-                "status": "ok",
-                "message": "Call received and queued for transcription",
-                "callId": upload_data.audio_filename or "unknown",
-            }
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "message": "Call received and queued for transcription",
+                    "callId": upload_data.audio_filename or "unknown",
+                }
+            )
         else:
             return Response(content="Call imported successfully.", media_type="text/plain")
 
@@ -586,7 +644,7 @@ async def upload_call(request: Request) -> Response:
 async def process_rdioscanner_call(
     upload_data: RdioScannerUpload,
     audio_file_path: Path,
-    transcription_service,
+    transcription_service: TranscriptionService,
     client_ip: str,
     api_key_id: Optional[str] = None,
     user_agent: Optional[str] = None,

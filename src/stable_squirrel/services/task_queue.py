@@ -11,12 +11,44 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional, TypedDict, Union
 from uuid import UUID, uuid4
 
 from stable_squirrel.database.models import RadioCallCreate
 
 logger = logging.getLogger(__name__)
+
+
+class TaskDict(TypedDict):
+    """TypedDict for serialized task data."""
+    task_id: str
+    call_data: Optional[dict[str, Union[str, int, float, None]]]
+    audio_file_path: Optional[str]
+    created_at: str
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    status: str
+    retry_count: int
+    max_retries: int
+    error_message: Optional[str]
+    worker_id: Optional[str]
+
+
+class QueueStats(TypedDict):
+    """TypedDict for queue statistics."""
+    total_enqueued: int
+    total_processed: int
+    total_failed: int
+    total_retries: int
+    average_processing_time: float
+    queue_full_rejections: int
+    queue_size: int
+    retry_queue_size: int
+    active_tasks: int
+    completed_tasks: int
+    failed_tasks: int
+    workers_running: int
+    is_running: bool
 
 
 class TaskStatus(Enum):
@@ -45,7 +77,7 @@ class TranscriptionTask:
     error_message: Optional[str] = None
     worker_id: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> TaskDict:
         """Convert task to dictionary for serialization."""
         return {
             "task_id": str(self.task_id),
@@ -70,9 +102,9 @@ class TranscriptionTaskQueue:
         self.num_workers = num_workers
 
         # Core queue and workers
-        self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
-        self.retry_queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size // 2)
-        self.workers: List[asyncio.Task] = []
+        self.task_queue: asyncio.Queue[TranscriptionTask] = asyncio.Queue(maxsize=max_queue_size)
+        self.retry_queue: asyncio.Queue[TranscriptionTask] = asyncio.Queue(maxsize=max_queue_size // 2)
+        self.workers: List[asyncio.Task[None]] = []
         self.running = False
 
         # Task tracking
@@ -91,10 +123,10 @@ class TranscriptionTaskQueue:
         }
 
         # Callbacks
-        self.transcription_processor: Optional[Callable] = None
-        self.progress_callback: Optional[Callable] = None
+        self.transcription_processor: Optional[Callable[[Path, RadioCallCreate], Awaitable[None]]] = None
+        self.progress_callback: Optional[Callable[[TranscriptionTask], None]] = None
 
-    async def start(self, transcription_processor: Callable):
+    async def start(self, transcription_processor: Callable[[Path, RadioCallCreate], Awaitable[None]]) -> None:
         """Start the task queue and workers."""
         if self.running:
             logger.warning("Task queue is already running")
@@ -115,7 +147,7 @@ class TranscriptionTaskQueue:
 
         logger.info("Transcription task queue started successfully")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the task queue and workers."""
         if not self.running:
             return
@@ -180,23 +212,25 @@ class TranscriptionTaskQueue:
 
         return None
 
-    def get_queue_stats(self) -> Dict[str, Any]:
+    def get_queue_stats(self) -> QueueStats:
         """Get current queue statistics."""
-        current_stats = self.stats.copy()
-        current_stats.update(
-            {
-                "queue_size": self.task_queue.qsize(),
-                "retry_queue_size": self.retry_queue.qsize(),
-                "active_tasks": len(self.active_tasks),
-                "completed_tasks": len(self.completed_tasks),
-                "failed_tasks": len(self.failed_tasks),
-                "workers_running": len(self.workers),
-                "is_running": self.running,
-            }
+        return QueueStats(
+            total_enqueued=int(self.stats["total_enqueued"]),
+            total_processed=int(self.stats["total_processed"]),
+            total_failed=int(self.stats["total_failed"]),
+            total_retries=int(self.stats["total_retries"]),
+            average_processing_time=self.stats["average_processing_time"],
+            queue_full_rejections=int(self.stats["queue_full_rejections"]),
+            queue_size=self.task_queue.qsize(),
+            retry_queue_size=self.retry_queue.qsize(),
+            active_tasks=len(self.active_tasks),
+            completed_tasks=len(self.completed_tasks),
+            failed_tasks=len(self.failed_tasks),
+            workers_running=len(self.workers),
+            is_running=self.running,
         )
-        return current_stats
 
-    async def _worker(self, worker_id: str):
+    async def _worker(self, worker_id: str) -> None:
         """Background worker that processes transcription tasks."""
         logger.info(f"Transcription worker {worker_id} started")
 
@@ -226,7 +260,7 @@ class TranscriptionTaskQueue:
 
         logger.info(f"Transcription worker {worker_id} stopped")
 
-    async def _process_task(self, task: TranscriptionTask, worker_id: str):
+    async def _process_task(self, task: TranscriptionTask, worker_id: str) -> None:
         """Process a single transcription task."""
         task.status = TaskStatus.PROCESSING
         task.started_at = datetime.now()
@@ -238,8 +272,8 @@ class TranscriptionTaskQueue:
             logger.info(f"Worker {worker_id} processing task {task.task_id}")
 
             # Call the transcription processor
-            if self.transcription_processor:
-                await self.transcription_processor(task.call_data, task.audio_file_path)
+            if self.transcription_processor and task.audio_file_path and task.call_data:
+                await self.transcription_processor(task.audio_file_path, task.call_data)
 
             # Mark as completed
             task.status = TaskStatus.COMPLETED
@@ -267,7 +301,7 @@ class TranscriptionTaskQueue:
             # Call progress callback if set
             if self.progress_callback:
                 try:
-                    await self.progress_callback(task)
+                    self.progress_callback(task)
                 except Exception as e:
                     logger.warning(f"Progress callback error: {e}")
 
@@ -294,7 +328,7 @@ class TranscriptionTaskQueue:
                 # Max retries exceeded
                 self._mark_task_failed(task)
 
-    def _mark_task_failed(self, task: TranscriptionTask):
+    def _mark_task_failed(self, task: TranscriptionTask) -> None:
         """Mark a task as permanently failed."""
         task.status = TaskStatus.FAILED
         task.completed_at = datetime.now()
@@ -308,7 +342,7 @@ class TranscriptionTaskQueue:
 
         logger.error(f"Task {task.task_id} permanently failed after {task.retry_count} retries")
 
-    async def _retry_processor(self):
+    async def _retry_processor(self) -> None:
         """Process retry queue."""
         logger.info("Retry processor started")
 
@@ -339,7 +373,7 @@ class TranscriptionTaskQueue:
 
         logger.info("Retry processor stopped")
 
-    async def cleanup_old_tasks(self, max_age_hours: int = 24):
+    async def cleanup_old_tasks(self, max_age_hours: int = 24) -> None:
         """Clean up old completed and failed tasks to prevent memory leaks."""
         cutoff_time = datetime.now().timestamp() - (max_age_hours * 3600)
 
@@ -390,7 +424,7 @@ def initialize_task_queue(max_queue_size: int = 10000, num_workers: int = 4) -> 
     return _task_queue
 
 
-async def shutdown_task_queue():
+async def shutdown_task_queue() -> None:
     """Shutdown the global task queue."""
     global _task_queue
     if _task_queue is not None:

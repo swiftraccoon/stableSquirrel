@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -26,7 +26,7 @@ class SecurityEventResponse(BaseModel):
     api_key_used: Optional[str] = None
     user_agent: Optional[str] = None
     description: str
-    metadata: Optional[Dict] = None
+    metadata: Optional[Dict[str, Any]] = None
     related_call_id: Optional[str] = None
     related_file_path: Optional[str] = None
 
@@ -44,9 +44,9 @@ class UploadSourceAnalysis(BaseModel):
     """Upload source analysis response."""
 
     system_id: str
-    upload_statistics: Dict
-    security_statistics: Dict
-    ip_addresses: List[Dict]
+    upload_statistics: Dict[str, Any]
+    security_statistics: Dict[str, Any]
+    ip_addresses: List[Dict[str, Any]]
     recent_events: List[SecurityEventResponse]
 
 
@@ -56,8 +56,8 @@ class SecuritySummary(BaseModel):
     total_events: int
     events_by_severity: Dict[str, int]
     recent_violations: List[SecurityEventResponse]
-    top_source_systems: List[Dict]
-    top_source_ips: List[Dict]
+    top_source_systems: List[Dict[str, Any]]
+    top_source_ips: List[Dict[str, Any]]
 
 
 @router.get("/events", response_model=SecurityEventsResponse)
@@ -201,7 +201,7 @@ async def get_security_summary(
         total_events = len(all_events)
 
         # Count events by severity
-        events_by_severity = {}
+        events_by_severity: Dict[str, int] = {}
         for event in all_events:
             severity = event.severity
             events_by_severity[severity] = events_by_severity.get(severity, 0) + 1
@@ -227,7 +227,7 @@ async def get_security_summary(
         ]
 
         # Count top source systems
-        system_counts = {}
+        system_counts: Dict[str, int] = {}
         for event in all_events:
             if event.source_system:
                 system_counts[event.source_system] = system_counts.get(event.source_system, 0) + 1
@@ -238,7 +238,7 @@ async def get_security_summary(
         ]
 
         # Count top source IPs
-        ip_counts = {}
+        ip_counts: Dict[str, int] = {}
         for event in all_events:
             if event.source_ip:
                 ip_counts[event.source_ip] = ip_counts.get(event.source_ip, 0) + 1
@@ -261,11 +261,11 @@ async def get_security_summary(
         raise HTTPException(status_code=500, detail=f"Error generating security summary: {str(e)}")
 
 
-@router.get("/uploads/sources", response_model=List[Dict])
+@router.get("/uploads/sources", response_model=List[Dict[str, Any]])
 async def get_upload_sources(
     request: Request,
     limit: int = Query(50, ge=1, le=500, description="Number of sources to return"),
-) -> List[Dict]:
+) -> List[Dict[str, Any]]:
     """Get list of all upload sources with basic statistics."""
 
     try:

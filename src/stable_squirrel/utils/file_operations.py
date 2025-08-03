@@ -11,11 +11,8 @@ import tempfile
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
-try:
-    import aiofiles
-    import aiofiles.os
-except ImportError:
-    aiofiles = None
+import aiofiles
+import aiofiles.os
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +20,8 @@ logger = logging.getLogger(__name__)
 class AsyncFileManager:
     """Manages async file operations with automatic cleanup."""
 
-    def __init__(self):
-        self._temp_files = set()
+    def __init__(self) -> None:
+        self._temp_files: set[Path] = set()
 
     async def save_upload_stream(
         self, content_stream: AsyncIterator[bytes], filename: str, max_size: int = 100 * 1024 * 1024  # 100MB default
@@ -57,24 +54,14 @@ class AsyncFileManager:
         try:
             total_size = 0
 
-            if aiofiles:
-                async with aiofiles.open(temp_path, "wb") as f:
-                    async for chunk in content_stream:
-                        total_size += len(chunk)
+            async with aiofiles.open(temp_path, "wb") as f:
+                async for chunk in content_stream:
+                    total_size += len(chunk)
 
-                        if total_size > max_size:
-                            raise ValueError(f"File size exceeds maximum of {max_size} bytes")
+                    if total_size > max_size:
+                        raise ValueError(f"File size exceeds maximum of {max_size} bytes")
 
-                        await f.write(chunk)
-            else:
-                with open(temp_path, "wb") as f:
-                    async for chunk in content_stream:
-                        total_size += len(chunk)
-
-                        if total_size > max_size:
-                            raise ValueError(f"File size exceeds maximum of {max_size} bytes")
-
-                        f.write(chunk)
+                    await f.write(chunk)
 
             logger.debug(f"Saved {total_size} bytes to {temp_path}")
             return temp_path
@@ -93,23 +80,13 @@ class AsyncFileManager:
             dest: Destination file path
             chunk_size: Size of chunks to read/write
         """
-        if aiofiles:
-            async with aiofiles.open(source, "rb") as src:
-                async with aiofiles.open(dest, "wb") as dst:
-                    while True:
-                        chunk = await src.read(chunk_size)
-                        if not chunk:
-                            break
-                        await dst.write(chunk)
-        else:
-            # Fallback to sync operations
-            with open(source, "rb") as src:
-                with open(dest, "wb") as dst:
-                    while True:
-                        chunk = src.read(chunk_size)
-                        if not chunk:
-                            break
-                        dst.write(chunk)
+        async with aiofiles.open(source, "rb") as src:
+            async with aiofiles.open(dest, "wb") as dst:
+                while True:
+                    chunk = await src.read(chunk_size)
+                    if not chunk:
+                        break
+                    await dst.write(chunk)
 
     async def read_file_chunks(self, file_path: Path, chunk_size: int = 64 * 1024) -> AsyncIterator[bytes]:
         """
@@ -122,40 +99,25 @@ class AsyncFileManager:
         Yields:
             Chunks of file data
         """
-        if aiofiles:
-            async with aiofiles.open(file_path, "rb") as f:
-                while True:
-                    chunk = await f.read(chunk_size)
-                    if not chunk:
-                        break
-                    yield chunk
-        else:
-            # Fallback to sync file reading in chunks
-            with open(file_path, "rb") as f:
-                while True:
-                    chunk = f.read(chunk_size)
-                    if not chunk:
-                        break
-                    yield chunk
+        async with aiofiles.open(file_path, "rb") as f:
+            while True:
+                chunk = await f.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
 
     async def get_file_size(self, file_path: Path) -> int:
         """Get file size asynchronously."""
-        if aiofiles:
-            stat = await aiofiles.os.stat(file_path)
-            return stat.st_size
-        else:
-            return file_path.stat().st_size
+        stat = await aiofiles.os.stat(file_path)
+        return stat.st_size
 
     async def file_exists(self, file_path: Path) -> bool:
         """Check if file exists asynchronously."""
-        if aiofiles:
-            try:
-                await aiofiles.os.stat(file_path)
-                return True
-            except FileNotFoundError:
-                return False
-        else:
-            return file_path.exists()
+        try:
+            await aiofiles.os.stat(file_path)
+            return True
+        except FileNotFoundError:
+            return False
 
     async def cleanup_file(self, file_path: Path) -> bool:
         """
@@ -166,10 +128,7 @@ class AsyncFileManager:
         """
         try:
             if await self.file_exists(file_path):
-                if aiofiles:
-                    await aiofiles.os.unlink(file_path)
-                else:
-                    file_path.unlink()
+                await aiofiles.os.unlink(file_path)
                 logger.debug(f"Cleaned up temp file: {file_path}")
 
             self._temp_files.discard(file_path)
@@ -225,16 +184,12 @@ class StreamingUploadProcessor:
         # Close the file descriptor and use aiofiles
         os.close(temp_fd)
 
-        if aiofiles:
-            async with aiofiles.open(temp_path, "wb") as f:
-                await f.write(audio_content)
-        else:
-            with open(temp_path, "wb") as f:
-                f.write(audio_content)
+        async with aiofiles.open(temp_path, "wb") as f:
+            await f.write(audio_content)
 
         return temp_path
 
-    async def validate_audio_stream(self, file_path: Path, allowed_formats: set = {".mp3"}) -> bool:
+    async def validate_audio_stream(self, file_path: Path, allowed_formats: set[str] = {".mp3"}) -> bool:
         """
         Validate audio file format by checking headers.
 
@@ -251,12 +206,8 @@ class StreamingUploadProcessor:
 
         # Check file header for MP3 files
         if file_path.suffix.lower() == ".mp3":
-            if aiofiles:
-                async with aiofiles.open(file_path, "rb") as f:
-                    header = await f.read(10)
-            else:
-                with open(file_path, "rb") as f:
-                    header = f.read(10)
+            async with aiofiles.open(file_path, "rb") as f:
+                header = await f.read(10)
 
             # Check for ID3 tag or MP3 frame sync
             if header.startswith(b"ID3") or header.startswith(b"\xff\xfb"):
@@ -266,7 +217,7 @@ class StreamingUploadProcessor:
 
         return True
 
-    async def cleanup(self):
+    async def cleanup(self) -> int:
         """Clean up all temporary files."""
         return await self.file_manager.cleanup_all()
 
@@ -292,7 +243,7 @@ def get_upload_processor() -> StreamingUploadProcessor:
     return _upload_processor
 
 
-async def cleanup_temp_files():
+async def cleanup_temp_files() -> int:
     """Clean up all temporary files from global instances."""
     file_manager = get_file_manager()
     upload_processor = get_upload_processor()

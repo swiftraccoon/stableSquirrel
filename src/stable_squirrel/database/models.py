@@ -1,7 +1,7 @@
 """Pydantic models for radio call data."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -172,7 +172,7 @@ class SecurityEvent(BaseModel):
 
     # Event details
     description: str
-    metadata: Optional[dict] = None  # Additional context
+    metadata: Optional[dict[str, Any]] = None  # Additional context
 
     # Related entities
     related_call_id: Optional[UUID] = None
