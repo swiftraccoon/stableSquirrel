@@ -4,9 +4,9 @@ Get Stable Squirrel running with SDRTrunk in 15 minutes.
 
 ## Prerequisites
 
-- **Python 3.12+**
-- **Docker** (for TimescaleDB)
-- **SDRTrunk** configured and running
+- Python 3.12+
+- Podman (for TimescaleDB)
+- SDRTrunk configured and running
 
 ## 1. Install Stable Squirrel
 
@@ -18,20 +18,17 @@ cd stableSquirrel
 # Create virtual environment and install
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -e ".[dev]"
+uv install -e ".[dev]"
 ```
 
-## 2. Start Services with Podman
+## 2. Start Database
 
 ```bash
-# Start all services (database + application)
-make podman-compose
-
-# Or manually
-podman-compose up -d
+# Start TimescaleDB
+make db-dev
 ```
 
-## 3. Configure Stable Squirrel
+## 3. Configure Application
 
 ```bash
 # Copy example config
@@ -42,33 +39,23 @@ cp config.yaml.example config.yaml
 
 ```yaml
 database:
-  host: "localhost"
-  port: 5432
-  database: "stable_squirrel"
-  username: "stable_squirrel" 
-  password: "changeme"
+  password: "changeme"  # Match the database container password
 
 ingestion:
-  # Set API key for SDRTrunk authentication
-  api_key: "your-secure-api-key-here"
+  api_key: "your-secure-api-key-here"  # Set API key for SDRTrunk
 
 transcription:
-  # Start with CPU-based model for testing
-  model_name: "base"
-  device: "cpu"
+  model_name: "base"  # Start with smaller model for testing
+  device: "cpu"       # Use GPU if available: "cuda"
 ```
 
-## 4. Configure and Start
+## 4. Start Application
 
 ```bash
-# Copy and edit configuration
-cp config.yaml.example config.yaml
-# Edit config.yaml with your settings (database, API keys, etc.)
+# Run the application
+make run
 
-# Start all services (TimescaleDB + Stable Squirrel)
-podman-compose up -d
-
-# Or for development with live reload
+# Or for development with debug logging
 make run-dev
 
 # Service starts on http://localhost:8000
@@ -77,18 +64,17 @@ make run-dev
 
 ## 5. Configure SDRTrunk
 
-In SDRTrunk, add a **Call Audio Recorder**:
+In SDRTrunk, add a Call Audio Recorder:
 
-1. **File → Edit Audio Recorders**
-2. **Add → RdioScanner Call Upload**
+1. File → Edit Audio Recorders
+2. Add → RdioScanner Call Upload
 3. Configure:
-   - **Server**: `http://localhost:8000`
-   - **API Key**: `your-secure-api-key-here` (from step 3)
-   - **System ID**: `100` (any unique number)
+   - Server: `http://localhost:8000`
+   - API Key: `your-secure-api-key-here` (from step 3)
+   - System ID: `100` (any unique number)
+4. Save and Enable the recorder
 
-4. **Save and Enable** the recorder
-
-## 6. Test the Integration
+## 6. Verify Installation
 
 ```bash
 # Check system health
@@ -98,66 +84,72 @@ curl http://localhost:8000/api/system-health
 {
   "status": "healthy",
   "database": {"healthy": true},
-  "task_queue": {"status": "healthy"},
-  "timestamp": 1704067200
+  "task_queue": {"status": "healthy"}
 }
 ```
 
-## 7. Monitor Activity
-
-```bash
-# View performance metrics  
-curl http://localhost:8000/api/queue-stats
-
-# Web interface (if enabled)
-open http://localhost:8000/docs
-```
-
-## 🎯 **Success!**
+## Success!
 
 When SDRTrunk records a call, you should see:
 
-1. **Upload logs** in Stable Squirrel console
-2. **Transcription processing** in background queue
-3. **Database entries** for calls and transcriptions
+1. Upload logs in Stable Squirrel console
+2. Transcription processing in background queue
+3. Database entries for calls and transcriptions
 
-## Next Steps
+## Monitor Activity
 
-- **[Performance Tuning](PERFORMANCE.md)** - Optimize for high volume
-- **[Security Guide](SECURITY_GUIDE.md)** - Enhanced API key setup  
-- **[API Reference](API_REFERENCE.md)** - Full API documentation
+```bash
+# View logs
+tail -f stable_squirrel.log
+
+# Check queue status
+curl http://localhost:8000/api/queue-stats
+
+# Browse API documentation
+open http://localhost:8000/docs
+```
 
 ## Common Issues
 
-### "Connection refused" to database
+### Database connection refused
 
 ```bash
-# Check if services are running
-podman-compose ps
+# Check if database is running
+podman ps
 
 # Check database logs
-podman-compose logs timescaledb
+podman logs timescaledb-dev
 
-# Check application logs
-podman-compose logs stable-squirrel
+# Restart database
+make db-stop
+make db-dev
 ```
 
-### SDRTrunk "Upload failed"
+### SDRTrunk upload failed
 
 ```bash
-# Check API key matches
+# Test API key
 curl -X POST http://localhost:8000/api/call-upload \
   -F "key=your-secure-api-key-here" \
   -F "system=100" \
   -F "test=1"
 
 # Should return: "incomplete call data: no talkgroup"
+# If you get "Invalid API key", check your config.yaml
 ```
 
 ### Transcription not working
 
 ```bash
-# Check if WhisperX model is loading
-# Look for "Loading WhisperX model" in logs
-# GPU models require CUDA setup
+# Check logs for WhisperX errors
+grep "WhisperX" stable_squirrel.log
+
+# Try smaller model if out of memory
+# Edit config.yaml: model_name: "tiny"
 ```
+
+## Next Steps
+
+- [Security Configuration](SECURITY.md) - Enhanced API key setup  
+- [API Documentation](API_REFERENCE.md) - Full API reference
+- [Monitoring Guide](MONITORING.md) - Performance monitoring

@@ -25,7 +25,7 @@ class IngestionConfig(BaseModel):
 
     # Polling settings (for compatibility with tests)
     polling_interval: float = 1.0  # Interval for checking new files
-    supported_formats: list[str] = Field(default=[".wav", ".mp3", ".m4a"])  # Supported audio formats
+    supported_formats: list[str] = Field(default=[".mp3"])  # Only MP3 is supported (SDRTrunk standard)
 
     # Security settings
     enable_file_validation: bool = True

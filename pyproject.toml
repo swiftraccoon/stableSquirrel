@@ -24,6 +24,7 @@ dependencies = [
     "torch>=2.7.1",
     "starlette>=0.47.2",
     "hypercorn>=0.17.3",
+    "psutil>=7.0.0",
 ]
 
 [project.optional-dependencies]

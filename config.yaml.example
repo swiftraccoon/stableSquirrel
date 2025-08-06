@@ -1,361 +1,106 @@
-# Stable Squirrel Configuration Example
-# Copy this file to config.yaml and modify as needed
+# Stable Squirrel Configuration
+# Copy this file to config.yaml and modify for your setup
 
 # =============================================================================
-# INGESTION & SECURITY CONFIGURATION
+# INGESTION SETTINGS - RdioScanner API and Security
 # =============================================================================
-# This section controls how SDRTrunk calls are received and validated
-
 ingestion:
-  # ============================
-  # API Key Authentication
-  # ============================
+  # API Authentication (choose one approach)
+  # Option 1: Simple single API key (legacy, but still supported)
+  api_key: "change-this-to-a-secure-key-at-least-16-chars"
   
-  # Legacy single API key (deprecated but still supported)
-  api_key: null  # Set to null when using enhanced api_keys below
-  
-  # Enhanced API key system with granular permissions and restrictions
+  # Option 2: Enhanced API keys with restrictions (recommended)
   api_keys:
-    # Primary monitoring station with static IP
-    - key: "station-alpha-secure-32-char-key-2024"
-      description: "Main SDR monitoring station"
-      allowed_ips: ["192.168.1.100", "10.0.0.50"]  # Restrict to specific IPs
-      allowed_systems: ["123", "456"]  # Restrict to specific SDRTrunk system IDs
-      
-    # Mobile monitoring unit (no IP restrictions)
-    - key: "mobile-unit-beta-different-key-2024"
-      description: "Mobile SDR setup"
+    - key: "primary-station-secure-key-32-chars"
+      description: "Main monitoring station"
+      allowed_ips: ["192.168.1.100"]      # Optional: restrict to specific IPs
+      allowed_systems: ["system-001"]      # Optional: restrict to specific systems
+    
+    - key: "mobile-unit-different-key-32-chars"
+      description: "Mobile monitoring unit"
+      # No IP restrictions for mobile units
       allowed_systems: ["mobile-001", "mobile-002"]
-      # No allowed_ips restriction for mobile units
-      
-    # Backup monitoring station
-    - key: "backup-station-gamma-unique-key-2024"
-      description: "Backup monitoring station"
-      allowed_ips: ["192.168.1.101"]
-      allowed_systems: ["backup-001"]
-      
-    # Testing/development key
-    - key: "dev-testing-key-insecure-change-me"
-      description: "Development and testing"
-      # No restrictions for development (NOT for production!)
-
-  # ============================
-  # File Validation & Security
-  # ============================
   
-  # Enable comprehensive file validation (recommended: true)
-  enable_file_validation: true
+  # File Processing
+  polling_interval: 1.0                    # Seconds between checking for new files
+  supported_formats: [".mp3"]              # Only MP3 is supported (SDRTrunk standard)
   
-  # File size limits (in megabytes)
-  max_file_size_mb: 50  # Typical radio calls are 10-100KB, set based on your needs
-  min_file_size_kb: 1   # Minimum file size to prevent empty uploads
+  # Security Settings
+  enable_file_validation: true             # Enable file security checks
+  max_file_size_mb: 100                    # Maximum upload size in MB
+  min_file_size_kb: 1                      # Minimum upload size in KB
+  max_uploads_per_minute: 10               # Rate limit per IP address
+  max_uploads_per_hour: 100                # Hourly rate limit per IP
   
-  # ============================
-  # Rate Limiting & Abuse Prevention
-  # ============================
-  
-  # Per-IP rate limits (adjust based on your radio traffic volume)
-  max_uploads_per_minute: 10  # Bursts allowed
-  max_uploads_per_hour: 100   # Sustained rate limit
-  
-  # Per-system rate limits (optional, overrides per-IP for specific systems)
-  system_rate_limits:
-    "high-volume-system-123":
-      max_uploads_per_minute: 30
-      max_uploads_per_hour: 500
-    "low-volume-system-456":
-      max_uploads_per_minute: 5
-      max_uploads_per_hour: 50
-
-  # ============================
-  # Enhanced Security Tracking
-  # ============================
-  
-  # Track upload sources for security analysis and forensics
-  track_upload_sources: true  # Recommended: true for security
-  
-  # Require system ID for all uploads (recommended for multi-system deployments)
-  require_system_id: true
-  
-  # Log all upload attempts (including successful ones) for audit
-  log_all_uploads: false  # Set to true for high-security environments
-  
-  # Security event retention (days)
-  security_event_retention_days: 365  # Keep security events for 1 year
+  # Upload Tracking
+  track_upload_sources: true               # Track which systems upload files
+  require_system_id: true                  # Require system ID parameter
+  log_all_uploads: false                   # Log all upload attempts (verbose)
+  security_event_retention_days: 365       # How long to keep security events
 
 # =============================================================================
-# TRANSCRIPTION CONFIGURATION
+# TRANSCRIPTION SETTINGS - WhisperX Configuration
 # =============================================================================
-# WhisperX speech-to-text and speaker diarization settings
-
 transcription:
-  # WhisperX model selection
-  # Options: tiny, base, small, medium, large, large-v2, large-v3
-  # Larger models = better accuracy but slower processing
-  model_name: "large-v2"
+  # Model Configuration
+  model_name: "base"                       # Options: tiny, base, small, medium, large, large-v2, large-v3
+  device: "auto"                           # auto, cpu, or cuda
+  language: null                           # null for auto-detect, or "en", "es", etc.
   
-  # Compute device selection
-  # "auto" = automatically detect best available (GPU > CPU)
-  # "cpu" = force CPU usage
-  # "cuda" = force NVIDIA GPU usage (requires CUDA)
-  device: "auto"
+  # Processing Settings
+  batch_size: 16                           # Reduce if getting out-of-memory errors
+  enable_diarization: true                 # Enable speaker identification
   
-  # Processing batch size (adjust based on available memory)
-  batch_size: 16  # Reduce if you get out-of-memory errors
+  # Performance Optimization
+  queue_size: 10000                        # Maximum pending transcriptions
+  num_workers: 4                           # Parallel transcription workers
+  max_file_size_mb: 100                    # Maximum audio file size
+  cleanup_interval_minutes: 5              # Temp file cleanup interval
   
-  # Speaker diarization (who spoke when)
-  enable_diarization: true  # Recommended: true for multi-speaker analysis
-  
-  # Language detection
-  language: null  # null = auto-detect, or specify like "en", "es", "fr"
-  
-  # Advanced WhisperX settings
-  compute_type: "float16"  # "float16" for GPU, "int8" for CPU
-  vad_filter: true  # Voice activity detection filter
-  vad_parameters:
-    threshold: 0.5
-    min_speech_duration_ms: 250
-    max_speech_duration_s: null
+  # Advanced Model Settings
+  compute_type: "auto"                     # auto, float16 (GPU), or int8 (CPU)
+  chunk_length: 30                         # Audio chunk length in seconds
+  use_pipeline_cache: true                 # Cache model for faster processing
 
 # =============================================================================
-# DATABASE CONFIGURATION
+# DATABASE SETTINGS - PostgreSQL/TimescaleDB
 # =============================================================================
-# TimescaleDB (PostgreSQL with time-series extension) settings
-
 database:
-  # Connection settings
+  # Connection Settings
   host: "localhost"
   port: 5432
   database: "stable_squirrel"
   username: "stable_squirrel"
-  password: "change-this-secure-password-in-production"
+  password: "changeme"                     # CHANGE THIS!
   
-  # SSL/TLS configuration (recommended for production)
-  sslmode: "prefer"  # "disable", "allow", "prefer", "require", "verify-ca", "verify-full"
-  sslcert: null      # Path to client certificate (if using SSL client auth)
-  sslkey: null       # Path to client private key
-  sslrootcert: null  # Path to CA certificate
+  # Connection Pooling
+  min_pool_size: 5                         # Minimum database connections
+  max_pool_size: 20                        # Maximum database connections
   
-  # Connection pool settings for high throughput
-  min_pool_size: 5   # Minimum connections to maintain
-  max_pool_size: 20  # Maximum concurrent connections
-  max_inactive_connection_lifetime: 300  # Seconds
-  
-  # Schema management
-  create_tables: true    # Automatically create tables on startup
-  enable_timescale: true # Enable TimescaleDB hypertables for time-series optimization
-  
-  # Performance optimization
-  enable_compression: true       # Enable TimescaleDB compression for old data
-  compression_age_days: 30      # Compress data older than 30 days
-  retention_policy_years: 5     # Delete radio calls older than 5 years
-  security_retention_years: 7   # Keep security events for 7 years (compliance)
+  # Schema Management
+  create_tables: true                      # Auto-create tables on startup
+  enable_timescale: true                   # Enable TimescaleDB extensions
 
 # =============================================================================
-# WEB SERVER CONFIGURATION
+# WEB SERVER SETTINGS - API Configuration
 # =============================================================================
-# FastAPI web server and API settings
-
 web:
-  # Server binding
-  host: "0.0.0.0"  # "0.0.0.0" = bind to all interfaces, "127.0.0.1" = localhost only
+  # Server Binding
+  host: "0.0.0.0"                          # 0.0.0.0 = all interfaces, 127.0.0.1 = localhost only
   port: 8000
   
-  # Development settings
-  reload: false      # Auto-reload on code changes (development only)
-  enable_docs: true  # Enable Swagger/OpenAPI documentation at /docs
+  # CORS Settings
+  cors_origins: ["*"]                      # Allowed origins (* = all, restrict in production)
   
-  # CORS (Cross-Origin Resource Sharing) settings
-  cors_origins:
-    - "http://localhost:3000"  # React development server
-    - "http://localhost:8080"  # Vue development server
-    - "*"  # Allow all origins (not recommended for production)
-  
-  cors_methods:
-    - "GET"
-    - "POST"
-    - "PUT"
-    - "DELETE"
-  
-  cors_headers:
-    - "Content-Type"
-    - "Authorization"
-  
-  # Request limits
-  max_request_size_mb: 150  # Maximum request size (should be > max_file_size_mb)
-  request_timeout_seconds: 300  # Request timeout
-  
-  # Security headers
-  security_headers:
-    X-Content-Type-Options: "nosniff"
-    X-Frame-Options: "DENY"
-    X-XSS-Protection: "1; mode=block"
-    Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+  # Documentation
+  enable_docs: true                        # Enable Swagger UI at /docs
 
 # =============================================================================
-# ALERTING & NOTIFICATIONS
+# ALERTS - Email Notifications (Not Yet Implemented)
 # =============================================================================
-# Email and webhook notifications for keywords and security events
-
 alerts:
-  enabled: false  # Enable alert system
-  
-  # Email configuration (SMTP)
-  email:
-    enabled: false
-    smtp_host: "smtp.gmail.com"
-    smtp_port: 587
-    smtp_username: "your-email@gmail.com"
-    smtp_password: "your-app-password"  # Use app password for Gmail
-    smtp_tls: true
-    from_address: "stable-squirrel@your-domain.com"
-    
-    # Alert recipients
-    recipients:
-      - "admin@your-domain.com"
-      - "security@your-domain.com"
-  
-  # Webhook notifications
-  webhooks:
-    enabled: false
-    urls:
-      - "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
-      - "https://discord.com/api/webhooks/YOUR/DISCORD/WEBHOOK"
-  
-  # Keyword alerts
-  keywords:
-    enabled: false
-    terms:
-      - "emergency"
-      - "officer down"
-      - "shots fired"
-      - "pursuit"
-    case_sensitive: false
-    whole_words_only: true
-  
-  # Security alerts
-  security_alerts:
-    enabled: true  # Enable security event notifications
-    severity_threshold: "medium"  # Alert on "medium", "high", "critical" events
-    rate_limit_minutes: 15  # Don't send duplicate alerts within 15 minutes
-    
-    # Alert on specific event types
-    alert_on_events:
-      - "malicious_content_detected"
-      - "rate_limit_exceeded"
-      - "api_key_ip_violation"
-      - "upload_blocked"
-
-# =============================================================================
-# LOGGING CONFIGURATION
-# =============================================================================
-# Application logging and audit trail settings
-
-logging:
-  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  level: "INFO"  # Use "DEBUG" for troubleshooting
-  
-  # Log format
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  
-  # Log output
-  console: true  # Log to console/stdout
-  file: true     # Log to file
-  
-  # File logging settings
-  file_path: "/var/log/stable-squirrel/app.log"
-  max_file_size_mb: 100
-  backup_count: 10
-  
-  # Structured logging (JSON format for log aggregation)
-  structured: false  # Set to true for ELK stack, Splunk, etc.
-  
-  # Security audit logging
-  security_audit:
-    enabled: true
-    file_path: "/var/log/stable-squirrel/security.log"
-    include_ip_addresses: true
-    include_user_agents: true
-
-# =============================================================================
-# PERFORMANCE & MONITORING
-# =============================================================================
-# Performance tuning and monitoring settings
-
-performance:
-  # Worker processes for CPU-intensive tasks
-  transcription_workers: 2  # Number of parallel transcription workers
-  
-  # Queue settings
-  max_queue_size: 1000  # Maximum queued transcription jobs
-  queue_timeout_seconds: 3600  # Job timeout
-  
-  # Caching
-  enable_caching: true
-  cache_ttl_seconds: 3600  # Cache transcriptions for 1 hour
-  
-  # Memory management
-  gc_threshold: 100  # Garbage collection threshold
-  max_memory_usage_mb: 8192  # Alert if memory usage exceeds this
-
-monitoring:
-  # Health check endpoints
-  enable_health_checks: true
-  
-  # Metrics collection
-  enable_metrics: true
-  metrics_port: 9090  # Prometheus metrics endpoint
-  
-  # Performance monitoring
-  track_response_times: true
-  track_database_performance: true
-  track_transcription_performance: true
-
-# =============================================================================
-# DEVELOPMENT & TESTING
-# =============================================================================
-# Settings for development and testing environments
-
-development:
-  # Enable development features
-  debug_mode: false  # Enable detailed error responses
-  
-  # Testing settings
-  enable_test_endpoints: false  # Enable /test/* endpoints for testing
-  mock_transcription: false     # Use mock transcription for testing
-  
-  # TimescaleDB is the only supported database for production use
-
-# =============================================================================
-# DEPLOYMENT ENVIRONMENT
-# =============================================================================
-# Environment-specific settings
-
-environment: "production"  # "development", "staging", "production"
-
-# Production-specific settings
-production:
-  # Security hardening
-  force_https: true           # Redirect HTTP to HTTPS
-  secure_cookies: true        # Use secure cookies
-  hide_server_header: true    # Hide server version information
-  
-  # Rate limiting
-  global_rate_limit: 1000     # Global requests per minute
-  
-  # Monitoring
-  enable_apm: false           # Application Performance Monitoring
-  apm_service_name: "stable-squirrel"
-
-# Staging-specific settings
-staging:
-  # Relaxed security for testing
-  force_https: false
-  enable_debug_logs: true
-
-# Development-specific settings  
-development:
-  # Development conveniences
-  auto_reload: true
-  enable_debug_toolbar: true
-  mock_external_services: true
+  enabled: false                           # Alert system not implemented yet
+  # smtp_host: "smtp.gmail.com"
+  # smtp_port: 587
+  # smtp_username: "your-email@gmail.com"
+  # smtp_password: "your-app-password"

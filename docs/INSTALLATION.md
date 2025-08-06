@@ -145,7 +145,7 @@ database:
   port: 5432
   database: "stable_squirrel"
   username: "your-username"
-  password: "${DATABASE_PASSWORD}"  # Use environment variable
+  password: "your-secure-password"  # Set a secure password
   
   # Production settings
   max_pool_size: 50
@@ -199,7 +199,7 @@ For GPU-accelerated transcription with CUDA:
 # Follow NVIDIA's installation guide for your OS
 
 # Install PyTorch with CUDA support
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+uv add torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
 
 # Update config for GPU usage
 transcription:
@@ -253,7 +253,7 @@ psql -h localhost -p 5432 -U stable_squirrel -d stable_squirrel -c "SELECT versi
 1. **"uv command not found"**
 
    ```bash
-   pip install uv
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
 2. **"Permission denied" on systemd install**
@@ -299,6 +299,5 @@ psql -h localhost -p 5432 -U stable_squirrel -d stable_squirrel -c "SELECT versi
 After successful installation:
 
 1. **[Configure SDRTrunk integration](QUICK_START.md#configure-sdrtrunk)**
-2. **[Set up security policies](SECURITY_GUIDE.md)**
-3. **[Optimize for your workload](PERFORMANCE.md)**
-4. **[Set up monitoring](MONITORING.md)**
+2. **[Set up security policies](SECURITY.md)**
+3. **[Set up monitoring](MONITORING.md)**

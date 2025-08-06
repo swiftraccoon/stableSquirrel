@@ -11,7 +11,7 @@ def test_default_config():
     config = Config()
 
     assert config.ingestion.polling_interval == 1.0
-    assert config.ingestion.supported_formats == [".wav", ".mp3", ".m4a"]
+    assert config.ingestion.supported_formats == [".mp3"]
     assert config.transcription.model_name == "large-v2"
     assert config.transcription.enable_diarization is True
     assert config.database.create_tables is True
