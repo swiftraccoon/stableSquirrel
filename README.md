@@ -1,4 +1,4 @@
-# Stable Squirrel
+# (W.I.P.) Stable Squirrel
 
 SDR audio transcription system that receives MP3 files from SDRTrunk and transcribes them using WhisperX.
 
